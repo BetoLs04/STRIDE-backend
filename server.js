@@ -22,7 +22,7 @@ if (!fs.existsSync(actividadesDir)) {
 
 // Middleware para manejar preflight OPTIONS
 app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', 'http://strideutmat.com');
+    res.header('Access-Control-Allow-Origin', 'https://strideutmat.com');
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, Origin, X-Requested-With');
     res.header('Access-Control-Allow-Credentials', 'true');
@@ -36,7 +36,7 @@ app.use((req, res, next) => {
 
 // CORS adicional para otras peticiones
 app.use(cors({
-    origin: 'http://strideutmat.com',
+    origin: 'https://strideutmat.com',
     credentials: true
 }));
 
@@ -54,7 +54,7 @@ app.use((req, res, next) => {
 app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
     setHeaders: (res, filePath) => {
         // Permitir acceso desde el frontend
-        res.set('Access-Control-Allow-Origin', 'http://strideutmat.com');
+        res.set('Access-Control-Allow-Origin', 'https://strideutmat.com');
         res.set('Cross-Origin-Resource-Policy', 'cross-origin');
     }
 }));
@@ -91,7 +91,7 @@ app.get('/check-uploads', (req, res) => {
         return {
             nombre: file,
             tamaño: stats.size,
-            url: `http://localhost:${PORT}/uploads/actividades/${file}`
+            url: `https://strideutmat.com:${PORT}/uploads/actividades/${file}`
         };
     });
     
@@ -99,12 +99,12 @@ app.get('/check-uploads', (req, res) => {
         success: true,
         totalArchivos: files.length,
         archivos: fileDetails,
-        uploadsUrl: `http://localhost:${PORT}/uploads/actividades/`
+        uploadsUrl: `https://strideutmat.com:${PORT}/uploads/actividades/`
     });
 });
 
 app.listen(PORT, () => {
-    console.log(`🎓 Sistema Universitario corriendo en http://localhost:${PORT}`);
-    console.log(`📁 Servidor de archivos en: http://localhost:${PORT}/uploads/`);
+    console.log(`🎓 Sistema Universitario corriendo en https://strideutmat.com:${PORT}`);
+    console.log(`📁 Servidor de archivos en: https://strideutmat.com:${PORT}/uploads/`);
     console.log(`📂 Ruta física: ${path.join(__dirname, 'uploads')}`);
 });
