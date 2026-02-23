@@ -507,8 +507,8 @@ router.get('/personal', async (req, res) => {
         // Añadir URL de foto a cada registro
         const personalConFotos = personal.map(persona => {
             const fotoUrl = persona.foto_perfil 
-                ? `/api/university/personal/foto/${persona.foto_perfil}`
-                : `/api/university/personal/foto/default-avatar.png`;
+                ? `http://strideutmat.com:5000/api/university/personal/foto/${persona.foto_perfil}`
+                : `http://strideutmat.com:5000/api/university/personal/foto/default-avatar.png`;
             
             console.log(`   👤 ${persona.nombre_completo}: ${persona.foto_perfil ? 'Tiene foto' : 'Sin foto'} -> ${fotoUrl}`);
             
@@ -563,7 +563,7 @@ router.get('/personal/debug-fotos', async (req, res) => {
                 existe_archivo: existeArchivo,
                 ruta: rutaArchivo,
                 url: persona.foto_perfil 
-                    ? `/api/university/personal/foto/${persona.foto_perfil}`
+                    ? `http://strideutmat.com:5000/api/university/personal/foto/${persona.foto_perfil}`
                     : 'Sin foto'
             });
         }
@@ -610,7 +610,7 @@ router.get('/personal/:id', async (req, res) => {
         const personaConFoto = {
             ...persona,
             foto_url: persona.foto_perfil 
-                ? `/api/university/personal/foto/${persona.foto_perfil}`
+                ? `http://strideutmat.com:5000/api/university/personal/foto/${persona.foto_perfil}`
                 : null
         };
         
@@ -905,7 +905,7 @@ router.get('/actividades/direccion/:direccion_id', async (req, res) => {
             // Crear URLs públicas para las imágenes
             actividad.imagenes = imagenes.map(img => ({
                 ...img,
-                url: `/uploads/actividades/${img.ruta_archivo}`
+                url: `http://strideutmat.com:5000/uploads/actividades/${img.ruta_archivo}`
             }));
             
             // Verificar que los archivos existen
@@ -980,7 +980,7 @@ router.get('/debug/uploads', (req, res) => {
                 nombre: file,
                 ruta: filePath,
                 tamaño: stats.size,
-                url: `/uploads/actividades/${file}`,
+                url: `http://strideutmat.com:5000/uploads/actividades/${file}`,
                 existe: fs.existsSync(filePath)
             };
         });
@@ -1035,7 +1035,7 @@ router.get('/actividades/todas', async (req, res) => {
             // Crear URLs públicas para las imágenes
             actividad.imagenes = imagenes.map(img => ({
                 ...img,
-                url: `/uploads/actividades/${img.ruta_archivo}`
+                url: `http://strideutmat.com:5000/uploads/actividades/${img.ruta_archivo}`
             }));
         }
         
@@ -1302,7 +1302,7 @@ router.get('/check-logo', (req, res) => {
       filename: logoFile,
       size: stats.size,
       path: filePath,
-      url: `/uploads/logos/${logoFile}`
+      url: `http://strideutmat.com:5000/uploads/logos/${logoFile}`
     });
     
   } catch (error) {
@@ -1852,7 +1852,7 @@ router.get('/tareas', async (req, res) => {
             
             tarea.archivos = archivos.map(archivo => ({
                 ...archivo,
-                url: `/uploads/tareas/${archivo.ruta_archivo}`
+                url: `http://strideutmat.com:5000/uploads/tareas/${archivo.ruta_archivo}`
             }));
             
             // Calcular progreso
@@ -1937,7 +1937,7 @@ router.get('/tareas/:id', async (req, res) => {
         
         tarea.archivos = archivos.map(archivo => ({
             ...archivo,
-            url: `/uploads/tareas/${archivo.ruta_archivo}`
+            url: `http://strideutmat.com:5000/uploads/tareas/${archivo.ruta_archivo}`
         }));
         
         // Obtener historial
@@ -2164,7 +2164,7 @@ router.get('/tareas/personal/:personalId', async (req, res) => {
       
       tarea.archivos = archivos.map(archivo => ({
         ...archivo,
-        url: `/uploads/tareas/${archivo.ruta_archivo}`
+        url: `http://strideutmat.com:5000/uploads/tareas/${archivo.ruta_archivo}`
       }));
       
       // Calcular días restantes
@@ -2461,6 +2461,168 @@ router.delete('/tareas/archivo/:archivoId', async (req, res) => {
       error: 'Error al eliminar archivo'
     });
   }
+});
+
+// ========== EDITAR Y ELIMINAR DIRECTIVOS ==========
+
+// Editar directivo
+router.put('/directivos/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { nombre_completo, cargo, direccion_id, email, password } = req.body;
+
+        if (!nombre_completo || !cargo || !direccion_id || !email) {
+            return res.status(400).json({
+                success: false,
+                error: 'Nombre, cargo, dirección y email son requeridos'
+            });
+        }
+
+        // Si se envía nueva contraseña, hashearla
+        let updateQuery;
+        let updateParams;
+
+        if (password && password.trim() !== '') {
+            const hashedPassword = await bcrypt.hash(password, 10);
+            updateQuery = `UPDATE directivos SET nombre_completo = ?, cargo = ?, direccion_id = ?, email = ?, password = ? WHERE id = ?`;
+            updateParams = [nombre_completo, cargo, direccion_id, email, hashedPassword, id];
+        } else {
+            updateQuery = `UPDATE directivos SET nombre_completo = ?, cargo = ?, direccion_id = ?, email = ? WHERE id = ?`;
+            updateParams = [nombre_completo, cargo, direccion_id, email, id];
+        }
+
+        const [result] = await db.execute(updateQuery, updateParams);
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, error: 'Directivo no encontrado' });
+        }
+
+        res.json({ success: true, message: 'Directivo actualizado exitosamente' });
+
+    } catch (error) {
+        if (error.code === 'ER_DUP_ENTRY') {
+            return res.status(400).json({ success: false, error: 'El email ya está registrado' });
+        }
+        console.error('Error al editar directivo:', error);
+        res.status(500).json({ success: false, error: 'Error al editar el directivo' });
+    }
+});
+
+// Eliminar directivo
+router.delete('/directivos/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const [directivos] = await db.execute('SELECT * FROM directivos WHERE id = ?', [id]);
+        if (directivos.length === 0) {
+            return res.status(404).json({ success: false, error: 'Directivo no encontrado' });
+        }
+
+        await db.execute('DELETE FROM directivos WHERE id = ?', [id]);
+
+        res.json({ success: true, message: 'Directivo eliminado exitosamente' });
+
+    } catch (error) {
+        console.error('Error al eliminar directivo:', error);
+        res.status(500).json({ success: false, error: 'Error al eliminar el directivo' });
+    }
+});
+
+// ========== EDITAR Y ELIMINAR PERSONAL ==========
+
+// Editar personal (con opción de cambiar foto)
+router.put('/personal/:id', uploadPersonal.single('foto'), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { nombre_completo, puesto, direccion_id, email, password } = req.body;
+
+        if (!nombre_completo || !puesto || !direccion_id || !email) {
+            if (req.file) fs.unlinkSync(req.file.path);
+            return res.status(400).json({
+                success: false,
+                error: 'Nombre, puesto, dirección y email son requeridos'
+            });
+        }
+
+        // Obtener personal actual para ver si tiene foto
+        const [personalActual] = await db.execute('SELECT * FROM personal WHERE id = ?', [id]);
+        if (personalActual.length === 0) {
+            if (req.file) fs.unlinkSync(req.file.path);
+            return res.status(404).json({ success: false, error: 'Personal no encontrado' });
+        }
+
+        const persona = personalActual[0];
+        let nuevaFoto = persona.foto_perfil; // Mantener foto actual por defecto
+
+        // Si se subió nueva foto, reemplazar
+        if (req.file) {
+            // Eliminar foto anterior si existe
+            if (persona.foto_perfil) {
+                const fotoAnterior = path.join('uploads/personal', persona.foto_perfil);
+                if (fs.existsSync(fotoAnterior)) {
+                    fs.unlinkSync(fotoAnterior);
+                }
+            }
+            nuevaFoto = req.file.filename;
+        }
+
+        // Construir query según si se cambia contraseña
+        let updateQuery;
+        let updateParams;
+
+        if (password && password.trim() !== '') {
+            const hashedPassword = await bcrypt.hash(password, 10);
+            updateQuery = `UPDATE personal SET nombre_completo = ?, puesto = ?, direccion_id = ?, email = ?, password = ?, foto_perfil = ? WHERE id = ?`;
+            updateParams = [nombre_completo, puesto, direccion_id, email, hashedPassword, nuevaFoto, id];
+        } else {
+            updateQuery = `UPDATE personal SET nombre_completo = ?, puesto = ?, direccion_id = ?, email = ?, foto_perfil = ? WHERE id = ?`;
+            updateParams = [nombre_completo, puesto, direccion_id, email, nuevaFoto, id];
+        }
+
+        await db.execute(updateQuery, updateParams);
+
+        res.json({ success: true, message: 'Personal actualizado exitosamente' });
+
+    } catch (error) {
+        if (req.file) {
+            try { fs.unlinkSync(req.file.path); } catch (e) {}
+        }
+        if (error.code === 'ER_DUP_ENTRY') {
+            return res.status(400).json({ success: false, error: 'El email ya está registrado' });
+        }
+        console.error('Error al editar personal:', error);
+        res.status(500).json({ success: false, error: 'Error al editar el personal' });
+    }
+});
+
+// Eliminar personal
+router.delete('/personal/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const [personalList] = await db.execute('SELECT * FROM personal WHERE id = ?', [id]);
+        if (personalList.length === 0) {
+            return res.status(404).json({ success: false, error: 'Personal no encontrado' });
+        }
+
+        const persona = personalList[0];
+
+        // Eliminar foto si existe
+        if (persona.foto_perfil) {
+            const fotoPath = path.join('uploads/personal', persona.foto_perfil);
+            if (fs.existsSync(fotoPath)) {
+                fs.unlinkSync(fotoPath);
+            }
+        }
+
+        await db.execute('DELETE FROM personal WHERE id = ?', [id]);
+
+        res.json({ success: true, message: 'Personal eliminado exitosamente' });
+
+    } catch (error) {
+        console.error('Error al eliminar personal:', error);
+        res.status(500).json({ success: false, error: 'Error al eliminar el personal' });
+    }
 });
 
 module.exports = router;
