@@ -2573,7 +2573,11 @@ router.put('/personal/:id', uploadPersonal.single('foto'), async (req, res) => {
         const persona = personalActual[0];
         let nuevaFoto = persona.foto_perfil; // Mantener foto actual por defecto
 
+<<<<<<< HEAD
         // Si se subió nueva foto, reemplazar con versión comprimida
+=======
+        // Si se subió nueva foto, reemplazar
+>>>>>>> c86f75758cebfb13d4dd1ad7a1c4364ad2ed5179
         if (req.file) {
             // Eliminar foto anterior si existe
             if (persona.foto_perfil) {
@@ -2582,6 +2586,7 @@ router.put('/personal/:id', uploadPersonal.single('foto'), async (req, res) => {
                     fs.unlinkSync(fotoAnterior);
                 }
             }
+<<<<<<< HEAD
             // Comprimir nueva foto
             try {
                 const compressedFilename = 'c-' + req.file.filename.replace(/\.[^.]+$/, '') + '.jpg';
@@ -2596,6 +2601,9 @@ router.put('/personal/:id', uploadPersonal.single('foto'), async (req, res) => {
                 console.error('Error comprimiendo foto:', sharpError);
                 nuevaFoto = req.file.filename; // usar original si falla
             }
+=======
+            nuevaFoto = req.file.filename;
+>>>>>>> c86f75758cebfb13d4dd1ad7a1c4364ad2ed5179
         }
 
         // Construir query según si se cambia contraseña
@@ -2657,4 +2665,8 @@ router.delete('/personal/:id', async (req, res) => {
     }
 });
 
+<<<<<<< HEAD
 module.exports = router;
+=======
+module.exports = router;
+>>>>>>> c86f75758cebfb13d4dd1ad7a1c4364ad2ed5179
