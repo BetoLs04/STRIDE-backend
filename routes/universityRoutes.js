@@ -3,7 +3,6 @@ const router = express.Router();
 const db = require('../config/database');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
-const sharp = require('sharp');
 const path = require('path');
 const fs = require('fs');
 
@@ -717,28 +716,10 @@ router.post('/personal', uploadPersonal.single('foto'), async (req, res) => {
         }
         
         const hashedPassword = await bcrypt.hash(password, 10);
-
-        // Comprimir foto si existe
-        let fotoFilename = null;
-        if (foto) {
-            try {
-                const compressedFilename = 'c-' + foto.filename.replace(/\.[^.]+$/, '') + '.jpg';
-                const compressedPath = path.join('uploads/personal', compressedFilename);
-                await sharp(foto.path)
-                    .resize(300, 300, { fit: 'cover' })
-                    .jpeg({ quality: 80 })
-                    .toFile(compressedPath);
-                fs.unlinkSync(foto.path);
-                fotoFilename = compressedFilename;
-            } catch (sharpError) {
-                console.error('Error comprimiendo foto:', sharpError);
-                fotoFilename = foto.filename; // usar original si falla
-            }
-        }
         
         const [result] = await db.execute(
             'INSERT INTO personal (nombre_completo, puesto, direccion_id, email, password, foto_perfil) VALUES (?, ?, ?, ?, ?, ?)',
-            [nombre_completo, puesto, direccion_id, email, hashedPassword, fotoFilename]
+            [nombre_completo, puesto, direccion_id, email, hashedPassword, foto ? foto.filename : null]
         );
         
         res.status(201).json({ 
@@ -2573,11 +2554,7 @@ router.put('/personal/:id', uploadPersonal.single('foto'), async (req, res) => {
         const persona = personalActual[0];
         let nuevaFoto = persona.foto_perfil; // Mantener foto actual por defecto
 
-<<<<<<< HEAD
-        // Si se subió nueva foto, reemplazar con versión comprimida
-=======
         // Si se subió nueva foto, reemplazar
->>>>>>> c86f75758cebfb13d4dd1ad7a1c4364ad2ed5179
         if (req.file) {
             // Eliminar foto anterior si existe
             if (persona.foto_perfil) {
@@ -2586,24 +2563,7 @@ router.put('/personal/:id', uploadPersonal.single('foto'), async (req, res) => {
                     fs.unlinkSync(fotoAnterior);
                 }
             }
-<<<<<<< HEAD
-            // Comprimir nueva foto
-            try {
-                const compressedFilename = 'c-' + req.file.filename.replace(/\.[^.]+$/, '') + '.jpg';
-                const compressedPath = path.join('uploads/personal', compressedFilename);
-                await sharp(req.file.path)
-                    .resize(300, 300, { fit: 'cover' })
-                    .jpeg({ quality: 80 })
-                    .toFile(compressedPath);
-                fs.unlinkSync(req.file.path);
-                nuevaFoto = compressedFilename;
-            } catch (sharpError) {
-                console.error('Error comprimiendo foto:', sharpError);
-                nuevaFoto = req.file.filename; // usar original si falla
-            }
-=======
             nuevaFoto = req.file.filename;
->>>>>>> c86f75758cebfb13d4dd1ad7a1c4364ad2ed5179
         }
 
         // Construir query según si se cambia contraseña
@@ -2665,8 +2625,4 @@ router.delete('/personal/:id', async (req, res) => {
     }
 });
 
-<<<<<<< HEAD
 module.exports = router;
-=======
-module.exports = router;
->>>>>>> c86f75758cebfb13d4dd1ad7a1c4364ad2ed5179
