@@ -52,8 +52,9 @@ app.use((req, res, next) => {
 
 // Servir archivos estáticos desde la carpeta uploads
 app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
+    maxAge: '30d',
+    etag: true,
     setHeaders: (res, filePath) => {
-        // Permitir acceso desde el frontend
         res.set('Access-Control-Allow-Origin', 'https://strideutmat.com');
         res.set('Cross-Origin-Resource-Policy', 'cross-origin');
     }
