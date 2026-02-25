@@ -905,7 +905,7 @@ router.get('/actividades/direccion/:direccion_id', async (req, res) => {
             // Crear URLs públicas para las imágenes
             actividad.imagenes = imagenes.map(img => ({
                 ...img,
-                url: `http://strideutmat.com:5000/uploads/actividades/${img.ruta_archivo}`
+                url: `/uploads/actividades/${img.ruta_archivo}`
             }));
             
             // Verificar que los archivos existen
@@ -1035,7 +1035,7 @@ router.get('/actividades/todas', async (req, res) => {
             // Crear URLs públicas para las imágenes
             actividad.imagenes = imagenes.map(img => ({
                 ...img,
-                url: `http://strideutmat.com:5000/uploads/actividades/${img.ruta_archivo}`
+                url: `/uploads/actividades/${img.ruta_archivo}`
             }));
         }
         
@@ -1852,7 +1852,7 @@ router.get('/tareas', async (req, res) => {
             
             tarea.archivos = archivos.map(archivo => ({
                 ...archivo,
-                url: `http://strideutmat.com:5000/uploads/tareas/${archivo.ruta_archivo}`
+                url: `/uploads/tareas/${archivo.ruta_archivo}`
             }));
             
             // Calcular progreso
@@ -1937,7 +1937,7 @@ router.get('/tareas/:id', async (req, res) => {
         
         tarea.archivos = archivos.map(archivo => ({
             ...archivo,
-            url: `http://strideutmat.com:5000/uploads/tareas/${archivo.ruta_archivo}`
+            url: `/uploads/tareas/${archivo.ruta_archivo}`
         }));
         
         // Obtener historial
@@ -2164,7 +2164,7 @@ router.get('/tareas/personal/:personalId', async (req, res) => {
       
       tarea.archivos = archivos.map(archivo => ({
         ...archivo,
-        url: `http://strideutmat.com:5000/uploads/tareas/${archivo.ruta_archivo}`
+        url: `/uploads/tareas/${archivo.ruta_archivo}`
       }));
       
       // Calcular días restantes
