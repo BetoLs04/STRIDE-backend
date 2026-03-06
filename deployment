@@ -1,0 +1,10 @@
+[config]
+; Este archivo le dice a Hostinger qué carpetas NO tocar durante el auto-deploy
+; La carpeta uploads/ se mantiene intacta entre deploys
+
+; Carpeta raíz del proyecto
+project = .
+
+; Carpetas que NO se deben borrar ni reemplazar en cada deploy
+; (Hostinger las trata como "persistent paths")
+exclude[] = uploads
