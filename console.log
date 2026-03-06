@@ -1,0 +1,24 @@
+{"timestamp":"2026-03-06T20:04:37.356Z","level":"LOG","message":"[dotenv@17.2.3] injecting env (6) from .env -- tip: 🔐 prevent committing .env to code: https://dotenvx.com/precommi{"ti{"timestamp":"2026-03-06T20:04:37.424Z","level":"LOG","message":"[dotenv@17.2.3] injecting env (0) from .env -- tip: 🗂️ backup and recover secrets: https://dotenvx.co{"timest{"timestamp":"2026-03-06T20:04:37.469Z","level":"LOG","message":"🎓 Sistema Universitario corriendo en https://strideutmat.com:5000"}
+{"timestamp":"2026-03-06T20:04:37.469Z","level":"LOG","message":"📁 Servidor de archivos en: https://strideutmat.com:5000/uploads/"}
+{"timestamp":"2026-03-06T20:04:37.469Z","level":"LOG","message":"📂 Ruta física: /home/u124063683/domains/api1.strideutmat.com/nodejs/uploads"}
+{"timestamp":"2026-03-06T20:04:37.479Z","level":"LOG","message":"2026-03-06T20:04:37.479Z - GET /api/university/personal"}
+{"timestamp":"2026-03-06T20:04:37.479Z","level":"LOG","message":"📋 Obteniendo todos los registros de personal..."}
+{"timestamp":"2026-03-06T20:04:37.484Z","level":"LOG","message":"2026-03-06T20:04:37.484Z - GET /api/university/comunicados-recientes?limit=10"}
+{"timestamp":"2026-03-06T20:04:37.485Z","level":"LOG","message":"📢 Obteniendo 10 comunicados recientes..."}
+{"timestamp":"2026-03-06T20:04:37.499Z","level":"LOG","message":"2026-03-06T20:04:37.499Z - GET /uploads/logos/institution-logo.gif"}
+{"timestamp":"2026-03-06T20:04:37.513Z","level":"LOG","message":"2026-03-06T20:04:37.513Z - GET /uploads/logos/institution-logo.jpg"}
+{"timestamp":"2026-03-06T20:04:37.516Z","level":"LOG","message":"2026-03-06T20:04:37.516Z - GET /api/university/tareas/personal/25/conteo"}
+{"timestamp":"2026-03-06T20:04:37.521Z","level":"LOG","message":"✅ Personal encontrado: 21 registros"}
+{"timestamp":"2026-03-06T20:04:37.524Z","level":"LOG","message":"2026-03-06T20:04:37.524Z - GET /uploads/logos/institution-logo.png"}
+{"timestamp":"2026-03-06T20:04:37.527Z","level":"LOG","message":"2026-03-06T20:04:37.527Z - GET /uploads/logos/institution-logo.jpeg"}
+{"timestamp":"2026-03-06T20:04:37.731Z","level":"LOG","message":"2026-03-06T20:04:37.731Z - GET /api/university/personal/foto/personal-1772052598931-578526550.jpeg"}
+{"timestamp":"2026-03-06T20:04:37.816Z","level":"LOG","message":"2026-03-06T20:04:37.816Z - GET /uploads/personal/personal-1772052598931-578526550.jpeg"}
+{"timestamp":"2026-03-06T20:04:37.896Z","level":"LOG","message":"2026-03-06T20:04:37.896Z - GET /api/university/personal/foto/default-avatar.png"}
+{"timestamp":"2026-03-06T20:04:39.221Z","level":"LOG","message":"2026-03-06T20:04:39.221Z - GET /api/university/actividades/direccion/2"}
+{"timestamp":"2026-03-06T20:04:39.221Z","level":"LOG","message":"📋 Obteniendo actividades para dirección: 2"}
+{"timestamp":"2026-03-06T20:04:39.223Z","level":"LOG","message":"📊 Actividades encontradas: 3"}
+{"timestamp":"2026-03-06T20:04:44.297Z","level":"LOG","message":"2026-03-06T20:04:44.297Z - GET /uploads/actividades/actividad-1772825898700-604922782.jpg"}
+{"timestamp":"2026-03-06T20:04:44.298Z","level":"LOG","message":"2026-03-06T20:04:44.298Z - GET /uploads/actividades/actividad-1772825898700-965959894.jpg"}
+{"timestamp":"2026-03-06T20:04:44.299Z","level":"LOG","message":"2026-03-06T20:04:44.299Z - GET /uploads/actividades/actividad-1772825898701-607127659.jpg"}
+{"timestamp":"2026-03-06T20:04:44.302Z","level":"LOG","message":"2026-03-06T20:04:44.302Z - GET /uploads/actividades/actividad-1772825898701-45921850.jpg"}
+{"timestamp":"2026-03-06T20:04:44.304Z","level":"LOG","message":"2026-03-06T20:04:44.304Z - GET /uploads/actividades/actividad-1772825898701-498209230.jpg"}
