@@ -1,7 +1,10 @@
 /node_modules
 
-uploads/.gitkeep
-uploads/actividades/.gitkeep
-uploads/tareas/.gitkeep
-uploads/personal/.gitkeep
-uploads/logos/.gitkeep
+# Ignorar TODO el contenido de uploads excepto los .gitkeep
+uploads/**
+!uploads/
+!uploads/**/.gitkeep
+!uploads/actividades/
+!uploads/tareas/
+!uploads/personal/
+!uploads/logos/
