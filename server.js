@@ -7,6 +7,7 @@ const fs = require('fs');
 const { execSync } = require('child_process');
 
 const app = express();
+//Puerto
 const PORT = process.env.PORT || 5000;
 
 // ✅ Recrear symlink de uploads automáticamente después de cada deploy
