@@ -1439,4 +1439,5 @@ router.delete('/personal/:id', async (req, res) => {
     }
 });
 
+//Ruta
 module.exports = router;
