@@ -429,7 +429,31 @@ router.post('/actividades', upload.array('imagenes', 5), async (req, res) => {
     }
 });
 
-// ✅ NUEVA RUTA: Editar actividad (solo el creador)
+// ✅ RUTA ESPECÍFICA PRIMERO: Actualizar estado de actividad
+router.put('/actividades/:id/estado', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { estado } = req.body;
+
+        const estadosValidos = ['pendiente', 'en_progreso', 'completada'];
+        if (!estado || !estadosValidos.includes(estado)) {
+            return res.status(400).json({ success: false, error: 'Estado inválido' });
+        }
+
+        const [result] = await db.execute('UPDATE actividades SET estado = ? WHERE id = ?', [estado, id]);
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, error: 'Actividad no encontrada' });
+        }
+
+        res.json({ success: true, message: 'Estado actualizado', affectedRows: result.affectedRows });
+    } catch (error) {
+        console.error('Error al actualizar estado:', error);
+        res.status(500).json({ success: false, error: 'Error al actualizar estado' });
+    }
+});
+
+// ✅ RUTA GENERAL DESPUÉS: Editar actividad (solo el creador)
 router.put('/actividades/:id', upload.array('imagenes', 5), async (req, res) => {
     try {
         const { id } = req.params;
@@ -437,7 +461,6 @@ router.put('/actividades/:id', upload.array('imagenes', 5), async (req, res) => 
 
         console.log('✏️ Editando actividad ID:', id);
 
-        // Validaciones básicas
         if (!titulo || !tipo_actividad || !fecha_inicio) {
             if (req.files && req.files.length > 0) {
                 req.files.forEach(file => { try { fs.unlinkSync(file.path); } catch (err) {} });
@@ -445,7 +468,6 @@ router.put('/actividades/:id', upload.array('imagenes', 5), async (req, res) => 
             return res.status(400).json({ success: false, error: 'Título, tipo de actividad y fecha de inicio son requeridos' });
         }
 
-        // Verificar que la actividad existe y que el solicitante es el creador
         const [actividades] = await db.execute(
             'SELECT * FROM actividades WHERE id = ?',
             [id]
@@ -460,7 +482,6 @@ router.put('/actividades/:id', upload.array('imagenes', 5), async (req, res) => 
 
         const actividad = actividades[0];
 
-        // Verificar que el usuario que edita es el creador
         if (String(actividad.creado_por_id) !== String(creado_por_id)) {
             if (req.files && req.files.length > 0) {
                 req.files.forEach(file => { try { fs.unlinkSync(file.path); } catch (err) {} });
@@ -475,16 +496,13 @@ router.put('/actividades/:id', upload.array('imagenes', 5), async (req, res) => 
             return res.status(400).json({ success: false, error: 'La fecha de fin no puede ser anterior a la fecha de inicio' });
         }
 
-        // Actualizar datos de la actividad
         await db.execute(
             `UPDATE actividades SET titulo = ?, descripcion = ?, tipo_actividad = ?, fecha_inicio = ?, fecha_fin = ? WHERE id = ?`,
             [titulo, descripcion || null, tipo_actividad, fecha_inicio, fecha_fin || null, id]
         );
 
-        // Si hay nuevas imágenes, agregarlas
         let imagenesAgregadas = 0;
         if (req.files && req.files.length > 0) {
-            // Verificar que no exceda el límite total de 5 imágenes
             const [imagenesActuales] = await db.execute(
                 'SELECT COUNT(*) as total FROM actividad_imagenes WHERE actividad_id = ?',
                 [id]
@@ -493,7 +511,6 @@ router.put('/actividades/:id', upload.array('imagenes', 5), async (req, res) => 
             const espacioDisponible = 5 - totalActual;
 
             if (req.files.length > espacioDisponible) {
-                // Eliminar archivos subidos de más
                 req.files.forEach(file => { try { fs.unlinkSync(file.path); } catch (err) {} });
                 return res.status(400).json({
                     success: false,
@@ -528,7 +545,7 @@ router.put('/actividades/:id', upload.array('imagenes', 5), async (req, res) => 
     }
 });
 
-// ✅ NUEVA RUTA: Eliminar imagen individual de una actividad
+// ✅ RUTA ESPECÍFICA PRIMERO: Eliminar imagen individual
 router.delete('/actividades/imagen/:imagenId', async (req, res) => {
     try {
         const { imagenId } = req.params;
@@ -536,7 +553,6 @@ router.delete('/actividades/imagen/:imagenId', async (req, res) => {
 
         console.log('🗑️ Eliminando imagen ID:', imagenId);
 
-        // Obtener la imagen
         const [imagenes] = await db.execute(
             'SELECT ai.*, a.creado_por_id FROM actividad_imagenes ai INNER JOIN actividades a ON ai.actividad_id = a.id WHERE ai.id = ?',
             [imagenId]
@@ -548,19 +564,16 @@ router.delete('/actividades/imagen/:imagenId', async (req, res) => {
 
         const imagen = imagenes[0];
 
-        // Verificar que quien solicita la eliminación es el creador de la actividad
         if (creado_por_id && String(imagen.creado_por_id) !== String(creado_por_id)) {
             return res.status(403).json({ success: false, error: 'No tienes permiso para eliminar esta imagen' });
         }
 
-        // Eliminar archivo físico
         const filePath = path.join(uploadDir, imagen.ruta_archivo);
         if (fs.existsSync(filePath)) {
             fs.unlinkSync(filePath);
             console.log('✅ Archivo físico eliminado:', filePath);
         }
 
-        // Eliminar registro de la base de datos
         await db.execute('DELETE FROM actividad_imagenes WHERE id = ?', [imagenId]);
 
         console.log(`✅ Imagen ${imagenId} eliminada exitosamente`);
@@ -573,6 +586,7 @@ router.delete('/actividades/imagen/:imagenId', async (req, res) => {
     }
 });
 
+// ✅ RUTA ESPECÍFICA PRIMERO: Obtener actividades por dirección
 router.get('/actividades/direccion/:direccion_id', async (req, res) => {
     try {
         const { direccion_id } = req.params;
@@ -607,18 +621,6 @@ router.get('/actividades/direccion/:direccion_id', async (req, res) => {
     }
 });
 
-router.put('/actividades/:id/estado', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { estado } = req.body;
-        const [result] = await db.execute('UPDATE actividades SET estado = ? WHERE id = ?', [estado, id]);
-        res.json({ success: true, message: 'Estado actualizado', affectedRows: result.affectedRows });
-    } catch (error) {
-        console.error('Error al actualizar estado:', error);
-        res.status(500).json({ success: false, error: 'Error al actualizar estado' });
-    }
-});
-
 router.get('/debug/uploads', (req, res) => {
     try {
         const uploadDir = 'uploads/actividades';
@@ -638,6 +640,7 @@ router.get('/debug/uploads', (req, res) => {
     }
 });
 
+// ✅ RUTA ESPECÍFICA PRIMERO: Obtener todas las actividades
 router.get('/actividades/todas', async (req, res) => {
     try {
         console.log('📋 Obteniendo TODAS las actividades del sistema');
@@ -670,6 +673,7 @@ router.get('/actividades/todas', async (req, res) => {
     }
 });
 
+// ✅ RUTA GENERAL DESPUÉS: Eliminar actividad por ID
 router.delete('/actividades/:id', async (req, res) => {
     try {
         const { id } = req.params;
@@ -1056,105 +1060,20 @@ router.get('/tareas', async (req, res) => {
     }
 });
 
-router.get('/tareas/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const [tareas] = await db.execute(`
-            SELECT t.*,
-                   CASE WHEN t.creado_por_tipo = 'superadmin' THEN su.username WHEN t.creado_por_tipo = 'directivo' THEN d.nombre_completo WHEN t.creado_por_tipo = 'personal' THEN p.nombre_completo END as creado_por_nombre
-            FROM tareas t
-            LEFT JOIN super_users su ON t.creado_por_id = su.id AND t.creado_por_tipo = 'superadmin'
-            LEFT JOIN directivos d ON t.creado_por_id = d.id AND t.creado_por_tipo = 'directivo'
-            LEFT JOIN personal p ON t.creado_por_id = p.id AND t.creado_por_tipo = 'personal'
-            WHERE t.id = ?
-        `, [id]);
-        if (tareas.length === 0) { return res.status(404).json({ success: false, error: 'Tarea no encontrada' }); }
-        const tarea = tareas[0];
-        const [asignaciones] = await db.execute(`
-            SELECT ta.*,
-                   CASE WHEN ta.usuario_tipo = 'directivo' THEN d.nombre_completo WHEN ta.usuario_tipo = 'personal' THEN p.nombre_completo END as usuario_nombre,
-                   CASE WHEN ta.usuario_tipo = 'directivo' THEN d.cargo WHEN ta.usuario_tipo = 'personal' THEN p.puesto END as usuario_cargo,
-                   dir.nombre as direccion_nombre
-            FROM tareas_asignaciones ta
-            LEFT JOIN directivos d ON ta.usuario_id = d.id AND ta.usuario_tipo = 'directivo'
-            LEFT JOIN personal p ON ta.usuario_id = p.id AND ta.usuario_tipo = 'personal'
-            LEFT JOIN direcciones dir ON (ta.usuario_tipo = 'directivo' AND d.direccion_id = dir.id) OR (ta.usuario_tipo = 'personal' AND p.direccion_id = dir.id)
-            WHERE ta.tarea_id = ?
-        `, [id]);
-        tarea.asignaciones = asignaciones;
-        const [archivos] = await db.execute(`SELECT * FROM tareas_archivos WHERE tarea_id = ?`, [id]);
-        tarea.archivos = archivos.map(archivo => ({ ...archivo, url: `/uploads/tareas/${archivo.ruta_archivo}` }));
-        const [historial] = await db.execute(`
-            SELECT h.*,
-                   CASE WHEN h.usuario_tipo = 'superadmin' THEN su.username WHEN h.usuario_tipo = 'directivo' THEN d.nombre_completo WHEN h.usuario_tipo = 'personal' THEN p.nombre_completo END as usuario_nombre
-            FROM tareas_historial h
-            LEFT JOIN super_users su ON h.usuario_id = su.id AND h.usuario_tipo = 'superadmin'
-            LEFT JOIN directivos d ON h.usuario_id = d.id AND h.usuario_tipo = 'directivo'
-            LEFT JOIN personal p ON h.usuario_id = p.id AND h.usuario_tipo = 'personal'
-            WHERE h.tarea_id = ?
-            ORDER BY h.fecha DESC
-        `, [id]);
-        tarea.historial = historial;
-        res.json({ success: true, data: tarea });
-    } catch (error) {
-        console.error('Error al obtener tarea:', error);
-        res.status(500).json({ success: false, error: 'Error al obtener tarea' });
-    }
-});
+// ✅ RUTAS ESPECÍFICAS DE TAREAS PRIMERO (antes de /tareas/:id)
 
-router.put('/tareas/asignacion/:id', async (req, res) => {
-    const connection = await db.getConnection();
+router.get('/tareas/usuarios-disponibles', async (req, res) => {
     try {
-        await connection.beginTransaction();
-        const { id } = req.params;
-        const { estado, comentarios, usuario_id, usuario_tipo } = req.body;
-        const [asignaciones] = await connection.execute('SELECT * FROM tareas_asignaciones WHERE id = ?', [id]);
-        if (asignaciones.length === 0) {
-            await connection.rollback(); connection.release();
-            return res.status(404).json({ success: false, error: 'Asignación no encontrada' });
-        }
-        const asignacion = asignaciones[0];
-        const fechaCompletado = estado === 'completada' ? new Date() : null;
-        await connection.execute(
-            `UPDATE tareas_asignaciones SET estado = ?, comentarios = ?, fecha_completado = ? WHERE id = ?`,
-            [estado, comentarios || null, fechaCompletado, id]
-        );
-        await connection.execute(
-            `INSERT INTO tareas_historial (tarea_id, usuario_id, usuario_tipo, accion, descripcion) VALUES (?, ?, ?, 'actualizacion', ?)`,
-            [asignacion.tarea_id, usuario_id || 1, usuario_tipo || 'superadmin', `Estado de asignación actualizado a: ${estado}`]
-        );
-        await connection.commit(); connection.release();
-        res.json({ success: true, message: 'Estado actualizado correctamente' });
+        const [personal] = await db.execute(`
+            SELECT p.id, p.nombre_completo as nombre, 'personal' as tipo, p.puesto as cargo, dir.nombre as direccion_nombre
+            FROM personal p
+            LEFT JOIN direcciones dir ON p.direccion_id = dir.id
+            ORDER BY p.nombre_completo
+        `);
+        res.json({ success: true, data: personal, metadata: { total: personal.length } });
     } catch (error) {
-        await connection.rollback(); connection.release();
-        console.error('Error al actualizar asignación:', error);
-        res.status(500).json({ success: false, error: 'Error al actualizar estado' });
-    }
-});
-
-router.delete('/tareas/:id', async (req, res) => {
-    const connection = await db.getConnection();
-    try {
-        await connection.beginTransaction();
-        const { id } = req.params;
-        const [archivos] = await connection.execute('SELECT * FROM tareas_archivos WHERE tarea_id = ?', [id]);
-        for (const archivo of archivos) {
-            try {
-                const filePath = path.join('uploads/tareas', archivo.ruta_archivo);
-                if (fs.existsSync(filePath)) { fs.unlinkSync(filePath); }
-            } catch (err) { console.error('Error eliminando archivo:', err); }
-        }
-        const [result] = await connection.execute('DELETE FROM tareas WHERE id = ?', [id]);
-        if (result.affectedRows === 0) {
-            await connection.rollback(); connection.release();
-            return res.status(404).json({ success: false, error: 'Tarea no encontrada' });
-        }
-        await connection.commit(); connection.release();
-        res.json({ success: true, message: 'Tarea eliminada exitosamente', archivosEliminados: archivos.length });
-    } catch (error) {
-        await connection.rollback(); connection.release();
-        console.error('Error al eliminar tarea:', error);
-        res.status(500).json({ success: false, error: 'Error al eliminar tarea' });
+        console.error('❌ Error al obtener personal:', error);
+        res.status(500).json({ success: false, error: 'Error al obtener personal' });
     }
 });
 
@@ -1170,7 +1089,19 @@ router.get('/tareas/archivo/:filename', (req, res) => {
     }
 });
 
-// ========== RUTAS PARA PERSONAL (TAREAS) ==========
+router.get('/tareas/personal/:personalId/conteo', async (req, res) => {
+  try {
+    const { personalId } = req.params;
+    const [result] = await db.execute(`
+      SELECT COUNT(*) as pendientes FROM tareas_asignaciones ta
+      WHERE ta.usuario_id = ? AND ta.usuario_tipo = 'personal' AND ta.estado IN ('pendiente', 'en_progreso')
+    `, [personalId]);
+    res.json({ success: true, data: { pendientes: result[0].pendientes } });
+  } catch (error) {
+    console.error('Error al obtener conteo:', error);
+    res.status(500).json({ success: false, error: 'Error al obtener conteo' });
+  }
+});
 
 router.get('/tareas/personal/:personalId', async (req, res) => {
   try {
@@ -1249,18 +1180,98 @@ router.post('/tareas/completar/:asignacionId', uploadTareas.array('archivos', 5)
   }
 });
 
-router.get('/tareas/personal/:personalId/conteo', async (req, res) => {
+router.put('/tareas/asignacion/:id', async (req, res) => {
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+        const { id } = req.params;
+        const { estado, comentarios, usuario_id, usuario_tipo } = req.body;
+        const [asignaciones] = await connection.execute('SELECT * FROM tareas_asignaciones WHERE id = ?', [id]);
+        if (asignaciones.length === 0) {
+            await connection.rollback(); connection.release();
+            return res.status(404).json({ success: false, error: 'Asignación no encontrada' });
+        }
+        const asignacion = asignaciones[0];
+        const fechaCompletado = estado === 'completada' ? new Date() : null;
+        await connection.execute(
+            `UPDATE tareas_asignaciones SET estado = ?, comentarios = ?, fecha_completado = ? WHERE id = ?`,
+            [estado, comentarios || null, fechaCompletado, id]
+        );
+        await connection.execute(
+            `INSERT INTO tareas_historial (tarea_id, usuario_id, usuario_tipo, accion, descripcion) VALUES (?, ?, ?, 'actualizacion', ?)`,
+            [asignacion.tarea_id, usuario_id || 1, usuario_tipo || 'superadmin', `Estado de asignación actualizado a: ${estado}`]
+        );
+        await connection.commit(); connection.release();
+        res.json({ success: true, message: 'Estado actualizado correctamente' });
+    } catch (error) {
+        await connection.rollback(); connection.release();
+        console.error('Error al actualizar asignación:', error);
+        res.status(500).json({ success: false, error: 'Error al actualizar estado' });
+    }
+});
+
+router.delete('/tareas/archivo/:archivoId', async (req, res) => {
   try {
-    const { personalId } = req.params;
-    const [result] = await db.execute(`
-      SELECT COUNT(*) as pendientes FROM tareas_asignaciones ta
-      WHERE ta.usuario_id = ? AND ta.usuario_tipo = 'personal' AND ta.estado IN ('pendiente', 'en_progreso')
-    `, [personalId]);
-    res.json({ success: true, data: { pendientes: result[0].pendientes } });
+    const { archivoId } = req.params;
+    const [archivos] = await db.execute('SELECT * FROM tareas_archivos WHERE id = ?', [archivoId]);
+    if (archivos.length === 0) { return res.status(404).json({ success: false, error: 'Archivo no encontrado' }); }
+    const archivo = archivos[0];
+    const filePath = path.join('uploads/tareas', archivo.ruta_archivo);
+    if (fs.existsSync(filePath)) { fs.unlinkSync(filePath); }
+    await db.execute('DELETE FROM tareas_archivos WHERE id = ?', [archivoId]);
+    res.json({ success: true, message: 'Archivo eliminado' });
   } catch (error) {
-    console.error('Error al obtener conteo:', error);
-    res.status(500).json({ success: false, error: 'Error al obtener conteo' });
+    console.error('Error eliminando archivo:', error);
+    res.status(500).json({ success: false, error: 'Error al eliminar archivo' });
   }
+});
+
+// ✅ RUTAS GENERALES DE TAREAS AL FINAL (/:id)
+
+router.get('/tareas/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const [tareas] = await db.execute(`
+            SELECT t.*,
+                   CASE WHEN t.creado_por_tipo = 'superadmin' THEN su.username WHEN t.creado_por_tipo = 'directivo' THEN d.nombre_completo WHEN t.creado_por_tipo = 'personal' THEN p.nombre_completo END as creado_por_nombre
+            FROM tareas t
+            LEFT JOIN super_users su ON t.creado_por_id = su.id AND t.creado_por_tipo = 'superadmin'
+            LEFT JOIN directivos d ON t.creado_por_id = d.id AND t.creado_por_tipo = 'directivo'
+            LEFT JOIN personal p ON t.creado_por_id = p.id AND t.creado_por_tipo = 'personal'
+            WHERE t.id = ?
+        `, [id]);
+        if (tareas.length === 0) { return res.status(404).json({ success: false, error: 'Tarea no encontrada' }); }
+        const tarea = tareas[0];
+        const [asignaciones] = await db.execute(`
+            SELECT ta.*,
+                   CASE WHEN ta.usuario_tipo = 'directivo' THEN d.nombre_completo WHEN ta.usuario_tipo = 'personal' THEN p.nombre_completo END as usuario_nombre,
+                   CASE WHEN ta.usuario_tipo = 'directivo' THEN d.cargo WHEN ta.usuario_tipo = 'personal' THEN p.puesto END as usuario_cargo,
+                   dir.nombre as direccion_nombre
+            FROM tareas_asignaciones ta
+            LEFT JOIN directivos d ON ta.usuario_id = d.id AND ta.usuario_tipo = 'directivo'
+            LEFT JOIN personal p ON ta.usuario_id = p.id AND ta.usuario_tipo = 'personal'
+            LEFT JOIN direcciones dir ON (ta.usuario_tipo = 'directivo' AND d.direccion_id = dir.id) OR (ta.usuario_tipo = 'personal' AND p.direccion_id = dir.id)
+            WHERE ta.tarea_id = ?
+        `, [id]);
+        tarea.asignaciones = asignaciones;
+        const [archivos] = await db.execute(`SELECT * FROM tareas_archivos WHERE tarea_id = ?`, [id]);
+        tarea.archivos = archivos.map(archivo => ({ ...archivo, url: `/uploads/tareas/${archivo.ruta_archivo}` }));
+        const [historial] = await db.execute(`
+            SELECT h.*,
+                   CASE WHEN h.usuario_tipo = 'superadmin' THEN su.username WHEN h.usuario_tipo = 'directivo' THEN d.nombre_completo WHEN h.usuario_tipo = 'personal' THEN p.nombre_completo END as usuario_nombre
+            FROM tareas_historial h
+            LEFT JOIN super_users su ON h.usuario_id = su.id AND h.usuario_tipo = 'superadmin'
+            LEFT JOIN directivos d ON h.usuario_id = d.id AND h.usuario_tipo = 'directivo'
+            LEFT JOIN personal p ON h.usuario_id = p.id AND h.usuario_tipo = 'personal'
+            WHERE h.tarea_id = ?
+            ORDER BY h.fecha DESC
+        `, [id]);
+        tarea.historial = historial;
+        res.json({ success: true, data: tarea });
+    } catch (error) {
+        console.error('Error al obtener tarea:', error);
+        res.status(500).json({ success: false, error: 'Error al obtener tarea' });
+    }
 });
 
 router.put('/tareas/:id', uploadTareas.array('archivos', 5), async (req, res) => {
@@ -1300,20 +1311,30 @@ router.put('/tareas/:id', uploadTareas.array('archivos', 5), async (req, res) =>
   }
 });
 
-router.delete('/tareas/archivo/:archivoId', async (req, res) => {
-  try {
-    const { archivoId } = req.params;
-    const [archivos] = await db.execute('SELECT * FROM tareas_archivos WHERE id = ?', [archivoId]);
-    if (archivos.length === 0) { return res.status(404).json({ success: false, error: 'Archivo no encontrado' }); }
-    const archivo = archivos[0];
-    const filePath = path.join('uploads/tareas', archivo.ruta_archivo);
-    if (fs.existsSync(filePath)) { fs.unlinkSync(filePath); }
-    await db.execute('DELETE FROM tareas_archivos WHERE id = ?', [archivoId]);
-    res.json({ success: true, message: 'Archivo eliminado' });
-  } catch (error) {
-    console.error('Error eliminando archivo:', error);
-    res.status(500).json({ success: false, error: 'Error al eliminar archivo' });
-  }
+router.delete('/tareas/:id', async (req, res) => {
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+        const { id } = req.params;
+        const [archivos] = await connection.execute('SELECT * FROM tareas_archivos WHERE tarea_id = ?', [id]);
+        for (const archivo of archivos) {
+            try {
+                const filePath = path.join('uploads/tareas', archivo.ruta_archivo);
+                if (fs.existsSync(filePath)) { fs.unlinkSync(filePath); }
+            } catch (err) { console.error('Error eliminando archivo:', err); }
+        }
+        const [result] = await connection.execute('DELETE FROM tareas WHERE id = ?', [id]);
+        if (result.affectedRows === 0) {
+            await connection.rollback(); connection.release();
+            return res.status(404).json({ success: false, error: 'Tarea no encontrada' });
+        }
+        await connection.commit(); connection.release();
+        res.json({ success: true, message: 'Tarea eliminada exitosamente', archivosEliminados: archivos.length });
+    } catch (error) {
+        await connection.rollback(); connection.release();
+        console.error('Error al eliminar tarea:', error);
+        res.status(500).json({ success: false, error: 'Error al eliminar tarea' });
+    }
 });
 
 // ========== EDITAR Y ELIMINAR DIRECTIVOS ==========
