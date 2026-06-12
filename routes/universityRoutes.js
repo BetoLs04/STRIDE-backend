@@ -1050,7 +1050,12 @@ router.get('/tareas', async (req, res) => {
             `, [tarea.id]);
             tarea.asignaciones = asignaciones;
             const [archivos] = await db.execute(`SELECT * FROM tareas_archivos WHERE tarea_id = ?`, [tarea.id]);
-            tarea.archivos = archivos.map(archivo => ({ ...archivo, url: `/uploads/tareas/${archivo.ruta_archivo}` }));
+            tarea.archivos = archivos.filter(a => !a.asignacion_id).map(archivo => ({ ...archivo, url: `/uploads/tareas/${archivo.ruta_archivo}` }));
+            for (let asig of tarea.asignaciones) {
+              asig.archivos_respuesta = archivos
+                .filter(a => a.asignacion_id === asig.id)
+                .map(archivo => ({ ...archivo, url: `/uploads/tareas/${archivo.ruta_archivo}` }));
+            }
             tarea.progreso = tarea.total_asignaciones > 0 ? Math.round((tarea.completadas / tarea.total_asignaciones) * 100) : 0;
         }
         res.json({ success: true, data: tareas, total: tareas.length });
@@ -1119,7 +1124,10 @@ router.get('/tareas/personal/:personalId', async (req, res) => {
     `, [personalId]);
     for (let tarea of tareas) {
       const [archivos] = await db.execute(`SELECT * FROM tareas_archivos WHERE tarea_id = ?`, [tarea.id]);
-      tarea.archivos = archivos.map(archivo => ({ ...archivo, url: `/uploads/tareas/${archivo.ruta_archivo}` }));
+      tarea.archivos = archivos.filter(a => !a.asignacion_id).map(archivo => ({ ...archivo, url: `/uploads/tareas/${archivo.ruta_archivo}` }));
+      tarea.archivos_respuesta = archivos
+        .filter(a => a.asignacion_id === tarea.asignacion_id)
+        .map(archivo => ({ ...archivo, url: `/uploads/tareas/${archivo.ruta_archivo}` }));
       const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
       const entrega = new Date(tarea.fecha_entrega); entrega.setHours(0, 0, 0, 0);
       tarea.dias_restantes = Math.ceil((entrega - hoy) / (1000 * 60 * 60 * 24));
@@ -1160,8 +1168,8 @@ router.post('/tareas/completar/:asignacionId', uploadTareas.array('archivos', 5)
     if (req.files && req.files.length > 0) {
       for (const file of req.files) {
         const [result] = await connection.execute(
-          `INSERT INTO tareas_archivos (tarea_id, nombre_original, nombre_archivo, ruta_archivo, tipo_mime, tamano) VALUES (?, ?, ?, ?, ?, ?)`,
-          [asignacion.tarea_id, file.originalname, file.filename, file.filename, file.mimetype, file.size]
+          `INSERT INTO tareas_archivos (tarea_id, nombre_original, nombre_archivo, ruta_archivo, tipo_mime, tamano, asignacion_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [asignacion.tarea_id, file.originalname, file.filename, file.filename, file.mimetype, file.size, asignacion.id]
         );
         archivosGuardados.push({ id: result.insertId, nombre: file.originalname });
       }
@@ -1255,7 +1263,12 @@ router.get('/tareas/:id', async (req, res) => {
         `, [id]);
         tarea.asignaciones = asignaciones;
         const [archivos] = await db.execute(`SELECT * FROM tareas_archivos WHERE tarea_id = ?`, [id]);
-        tarea.archivos = archivos.map(archivo => ({ ...archivo, url: `/uploads/tareas/${archivo.ruta_archivo}` }));
+        tarea.archivos = archivos.filter(a => !a.asignacion_id).map(archivo => ({ ...archivo, url: `/uploads/tareas/${archivo.ruta_archivo}` }));
+        for (let asig of tarea.asignaciones) {
+          asig.archivos_respuesta = archivos
+            .filter(a => a.asignacion_id === asig.id)
+            .map(archivo => ({ ...archivo, url: `/uploads/tareas/${archivo.ruta_archivo}` }));
+        }
         const [historial] = await db.execute(`
             SELECT h.*,
                    CASE WHEN h.usuario_tipo = 'superadmin' THEN su.username WHEN h.usuario_tipo = 'directivo' THEN d.nombre_completo WHEN h.usuario_tipo = 'personal' THEN p.nombre_completo END as usuario_nombre
