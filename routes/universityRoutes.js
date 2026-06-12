@@ -6,6 +6,8 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
+const API_BASE_URL = process.env.API_URL || 'https://api1.strideutmat.com';
+
 // ========== CONFIGURACIÓN DE MULTER ==========
 
 const uploadDir = 'uploads/actividades';
@@ -840,7 +842,7 @@ router.get('/comunicados', async (req, res) => {
         `);
         for (let c of comunicados) {
             const [archivos] = await db.execute(`SELECT * FROM comunicados_archivos WHERE comunicado_id = ?`, [c.id]);
-            c.archivos = archivos.map(a => ({ ...a, url: `/uploads/comunicados/${a.ruta_archivo}` }));
+            c.archivos = archivos.map(a => ({ ...a, url: `${API_BASE_URL}/uploads/comunicados/${a.ruta_archivo}` }));
         }
         res.json({ success: true, data: comunicados });
     } catch (error) {
@@ -859,7 +861,7 @@ router.get('/comunicados-admin', async (req, res) => {
         `);
         for (let c of comunicados) {
             const [archivos] = await db.execute(`SELECT * FROM comunicados_archivos WHERE comunicado_id = ?`, [c.id]);
-            c.archivos = archivos.map(a => ({ ...a, url: `/uploads/comunicados/${a.ruta_archivo}` }));
+            c.archivos = archivos.map(a => ({ ...a, url: `${API_BASE_URL}/uploads/comunicados/${a.ruta_archivo}` }));
         }
         res.json({ success: true, data: comunicados });
     } catch (error) {
@@ -882,7 +884,7 @@ router.get('/comunicados/:id', async (req, res) => {
         }
         const c = comunicados[0];
         const [archivos] = await db.execute(`SELECT * FROM comunicados_archivos WHERE comunicado_id = ?`, [id]);
-        c.archivos = archivos.map(a => ({ ...a, url: `/uploads/comunicados/${a.ruta_archivo}` }));
+        c.archivos = archivos.map(a => ({ ...a, url: `${API_BASE_URL}/uploads/comunicados/${a.ruta_archivo}` }));
         res.json({ success: true, data: c });
     } catch (error) {
         console.error('Error al obtener comunicado:', error);
@@ -967,7 +969,7 @@ router.get('/comunicados-recientes', async (req, res) => {
         const [comunicados] = await db.execute(query);
         for (let c of comunicados) {
             const [archivos] = await db.execute(`SELECT * FROM comunicados_archivos WHERE comunicado_id = ?`, [c.id]);
-            c.archivos = archivos.map(a => ({ ...a, url: `/uploads/comunicados/${a.ruta_archivo}` }));
+            c.archivos = archivos.map(a => ({ ...a, url: `${API_BASE_URL}/uploads/comunicados/${a.ruta_archivo}` }));
         }
         res.json({ success: true, data: comunicados, limit: limit });
     } catch (error) {
@@ -991,7 +993,7 @@ router.get('/comunicados-recientes-alt', async (req, res) => {
         const [comunicados] = await db.query(sql);
         for (let c of comunicados) {
             const [archivos] = await db.execute(`SELECT * FROM comunicados_archivos WHERE comunicado_id = ?`, [c.id]);
-            c.archivos = archivos.map(a => ({ ...a, url: `/uploads/comunicados/${a.ruta_archivo}` }));
+            c.archivos = archivos.map(a => ({ ...a, url: `${API_BASE_URL}/uploads/comunicados/${a.ruta_archivo}` }));
         }
         res.json({ success: true, data: comunicados, limit: limit });
     } catch (error) {
