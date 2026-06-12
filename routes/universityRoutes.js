@@ -779,9 +779,30 @@ router.get('/check-logo', (req, res) => {
   }
 });
 
+// ========== CONFIGURACIÓN DE MULTER PARA COMUNICADOS ==========
+
+const comunicadosDir = 'uploads/comunicados';
+if (!fs.existsSync(comunicadosDir)) { fs.mkdirSync(comunicadosDir, { recursive: true }); }
+
+const comunicadosStorage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, comunicadosDir);
+    },
+    filename: function (req, file, cb) {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        const ext = path.extname(file.originalname);
+        cb(null, 'comunicado-' + uniqueSuffix + ext);
+    }
+});
+
+const uploadComunicados = multer({
+    storage: comunicadosStorage,
+    limits: { fileSize: 10 * 1024 * 1024, files: 5 }
+});
+
 // ========== COMUNICADOS ==========
 
-router.post('/comunicados', async (req, res) => {
+router.post('/comunicados', uploadComunicados.array('archivos', 5), async (req, res) => {
     try {
         const { titulo, contenido, link_externo, publicado_por_id } = req.body;
         console.log('📝 Creando comunicado:', { titulo, publicado_por_id });
@@ -792,7 +813,16 @@ router.post('/comunicados', async (req, res) => {
             `INSERT INTO comunicados (titulo, contenido, link_externo, publicado_por_id, estado) VALUES (?, ?, ?, ?, 'publicado')`,
             [titulo, contenido, link_externo || null, publicado_por_id]
         );
-        res.status(201).json({ success: true, message: 'Comunicado publicado exitosamente', comunicadoId: result.insertId });
+        const comunicadoId = result.insertId;
+        if (req.files && req.files.length > 0) {
+            for (const file of req.files) {
+                await db.execute(
+                    `INSERT INTO comunicados_archivos (comunicado_id, nombre_original, nombre_archivo, ruta_archivo, tipo_mime, tamano) VALUES (?, ?, ?, ?, ?, ?)`,
+                    [comunicadoId, file.originalname, file.filename, file.filename, file.mimetype, file.size]
+                );
+            }
+        }
+        res.status(201).json({ success: true, message: 'Comunicado publicado exitosamente', comunicadoId });
     } catch (error) {
         console.error('❌ Error al crear comunicado:', error);
         res.status(500).json({ success: false, error: error.message || 'Error al crear el comunicado' });
@@ -808,6 +838,10 @@ router.get('/comunicados', async (req, res) => {
             WHERE c.estado = 'publicado'
             ORDER BY c.fecha_publicacion DESC
         `);
+        for (let c of comunicados) {
+            const [archivos] = await db.execute(`SELECT * FROM comunicados_archivos WHERE comunicado_id = ?`, [c.id]);
+            c.archivos = archivos.map(a => ({ ...a, url: `/uploads/comunicados/${a.ruta_archivo}` }));
+        }
         res.json({ success: true, data: comunicados });
     } catch (error) {
         console.error('❌ Error al obtener comunicados:', error);
@@ -823,6 +857,10 @@ router.get('/comunicados-admin', async (req, res) => {
             LEFT JOIN super_users su ON c.publicado_por_id = su.id
             ORDER BY c.fecha_publicacion DESC
         `);
+        for (let c of comunicados) {
+            const [archivos] = await db.execute(`SELECT * FROM comunicados_archivos WHERE comunicado_id = ?`, [c.id]);
+            c.archivos = archivos.map(a => ({ ...a, url: `/uploads/comunicados/${a.ruta_archivo}` }));
+        }
         res.json({ success: true, data: comunicados });
     } catch (error) {
         console.error('❌ Error al obtener comunicados para admin:', error);
@@ -842,14 +880,17 @@ router.get('/comunicados/:id', async (req, res) => {
         if (comunicados.length === 0) {
             return res.status(404).json({ success: false, error: 'Comunicado no encontrado' });
         }
-        res.json({ success: true, data: comunicados[0] });
+        const c = comunicados[0];
+        const [archivos] = await db.execute(`SELECT * FROM comunicados_archivos WHERE comunicado_id = ?`, [id]);
+        c.archivos = archivos.map(a => ({ ...a, url: `/uploads/comunicados/${a.ruta_archivo}` }));
+        res.json({ success: true, data: c });
     } catch (error) {
         console.error('Error al obtener comunicado:', error);
         res.status(500).json({ success: false, error: 'Error al obtener comunicado' });
     }
 });
 
-router.put('/comunicados/:id', async (req, res) => {
+router.put('/comunicados/:id', uploadComunicados.array('archivos', 5), async (req, res) => {
     try {
         const { id } = req.params;
         const { titulo, contenido, link_externo, estado } = req.body;
@@ -858,6 +899,14 @@ router.put('/comunicados/:id', async (req, res) => {
             [titulo, contenido, link_externo || null, estado, id]
         );
         if (result.affectedRows === 0) { return res.status(404).json({ success: false, error: 'Comunicado no encontrado' }); }
+        if (req.files && req.files.length > 0) {
+            for (const file of req.files) {
+                await db.execute(
+                    `INSERT INTO comunicados_archivos (comunicado_id, nombre_original, nombre_archivo, ruta_archivo, tipo_mime, tamano) VALUES (?, ?, ?, ?, ?, ?)`,
+                    [id, file.originalname, file.filename, file.filename, file.mimetype, file.size]
+                );
+            }
+        }
         res.json({ success: true, message: 'Comunicado actualizado exitosamente' });
     } catch (error) {
         console.error('Error al actualizar comunicado:', error);
@@ -868,12 +917,33 @@ router.put('/comunicados/:id', async (req, res) => {
 router.delete('/comunicados/:id', async (req, res) => {
     try {
         const { id } = req.params;
+        const [archivos] = await db.execute(`SELECT * FROM comunicados_archivos WHERE comunicado_id = ?`, [id]);
+        for (const arch of archivos) {
+            const filePath = path.join(comunicadosDir, arch.ruta_archivo);
+            if (fs.existsSync(filePath)) { fs.unlinkSync(filePath); }
+        }
         const [result] = await db.execute('DELETE FROM comunicados WHERE id = ?', [id]);
         if (result.affectedRows === 0) { return res.status(404).json({ success: false, error: 'Comunicado no encontrado' }); }
         res.json({ success: true, message: 'Comunicado eliminado exitosamente' });
     } catch (error) {
         console.error('Error al eliminar comunicado:', error);
         res.status(500).json({ success: false, error: 'Error al eliminar comunicado' });
+    }
+});
+
+router.delete('/comunicados/:id/archivo/:archivoId', async (req, res) => {
+    try {
+        const { id, archivoId } = req.params;
+        const [archivos] = await db.execute(`SELECT * FROM comunicados_archivos WHERE id = ? AND comunicado_id = ?`, [archivoId, id]);
+        if (archivos.length === 0) { return res.status(404).json({ success: false, error: 'Archivo no encontrado' }); }
+        const arch = archivos[0];
+        const filePath = path.join(comunicadosDir, arch.ruta_archivo);
+        if (fs.existsSync(filePath)) { fs.unlinkSync(filePath); }
+        await db.execute(`DELETE FROM comunicados_archivos WHERE id = ?`, [archivoId]);
+        res.json({ success: true, message: 'Archivo eliminado exitosamente' });
+    } catch (error) {
+        console.error('Error al eliminar archivo:', error);
+        res.status(500).json({ success: false, error: 'Error al eliminar archivo' });
     }
 });
 
@@ -895,6 +965,10 @@ router.get('/comunicados-recientes', async (req, res) => {
             LIMIT ${limit}
         `;
         const [comunicados] = await db.execute(query);
+        for (let c of comunicados) {
+            const [archivos] = await db.execute(`SELECT * FROM comunicados_archivos WHERE comunicado_id = ?`, [c.id]);
+            c.archivos = archivos.map(a => ({ ...a, url: `/uploads/comunicados/${a.ruta_archivo}` }));
+        }
         res.json({ success: true, data: comunicados, limit: limit });
     } catch (error) {
         console.error('❌ Error al obtener comunicados recientes:', error);
@@ -915,6 +989,10 @@ router.get('/comunicados-recientes-alt', async (req, res) => {
             LIMIT ${db.escape(limit)}
         `;
         const [comunicados] = await db.query(sql);
+        for (let c of comunicados) {
+            const [archivos] = await db.execute(`SELECT * FROM comunicados_archivos WHERE comunicado_id = ?`, [c.id]);
+            c.archivos = archivos.map(a => ({ ...a, url: `/uploads/comunicados/${a.ruta_archivo}` }));
+        }
         res.json({ success: true, data: comunicados, limit: limit });
     } catch (error) {
         console.error('Error:', error);
