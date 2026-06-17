@@ -1532,5 +1532,123 @@ router.delete('/personal/:id', async (req, res) => {
     }
 });
 
-//Ruta
+// ========== MATRIZ DE INDICADORES - SECCIONES ==========
+
+router.get('/matriz-secciones', async (req, res) => {
+    try {
+        const [secciones] = await db.execute(`
+            SELECT ms.*,
+                   COUNT(msd.direccion_id) AS total_direcciones
+            FROM matriz_secciones ms
+            LEFT JOIN matriz_seccion_direcciones msd ON ms.id = msd.seccion_id
+            GROUP BY ms.id
+            ORDER BY ms.nombre
+        `);
+        for (let seccion of secciones) {
+            const [direcciones] = await db.execute(`
+                SELECT d.id, d.nombre
+                FROM direcciones d
+                INNER JOIN matriz_seccion_direcciones msd ON d.id = msd.direccion_id
+                WHERE msd.seccion_id = ?
+                ORDER BY d.nombre
+            `, [seccion.id]);
+            seccion.direcciones = direcciones;
+        }
+        res.json({ success: true, data: secciones });
+    } catch (error) {
+        console.error('Error al obtener secciones:', error);
+        res.status(500).json({ success: false, error: 'Error al obtener secciones' });
+    }
+});
+
+router.post('/matriz-secciones', async (req, res) => {
+    try {
+        const { nombre } = req.body;
+        if (!nombre || !nombre.trim()) {
+            return res.status(400).json({ success: false, error: 'El nombre es requerido' });
+        }
+        const [result] = await db.execute('INSERT INTO matriz_secciones (nombre) VALUES (?)', [nombre.trim()]);
+        res.status(201).json({ success: true, message: 'Sección creada', seccionId: result.insertId });
+    } catch (error) {
+        console.error('Error al crear sección:', error);
+        res.status(500).json({ success: false, error: 'Error al crear la sección' });
+    }
+});
+
+router.put('/matriz-secciones/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { nombre } = req.body;
+        if (!nombre || !nombre.trim()) {
+            return res.status(400).json({ success: false, error: 'El nombre es requerido' });
+        }
+        const [result] = await db.execute('UPDATE matriz_secciones SET nombre = ? WHERE id = ?', [nombre.trim(), id]);
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, error: 'Sección no encontrada' });
+        }
+        res.json({ success: true, message: 'Sección actualizada' });
+    } catch (error) {
+        console.error('Error al actualizar sección:', error);
+        res.status(500).json({ success: false, error: 'Error al actualizar la sección' });
+    }
+});
+
+router.delete('/matriz-secciones/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const [result] = await db.execute('DELETE FROM matriz_secciones WHERE id = ?', [id]);
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, error: 'Sección no encontrada' });
+        }
+        res.json({ success: true, message: 'Sección eliminada' });
+    } catch (error) {
+        console.error('Error al eliminar sección:', error);
+        res.status(500).json({ success: false, error: 'Error al eliminar la sección' });
+    }
+});
+
+// ========== MATRIZ DE INDICADORES - ASIGNACIÓN DE DIRECCIONES ==========
+
+router.post('/matriz-secciones/:id/direcciones', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { direccion_id } = req.body;
+        if (!direccion_id) {
+            return res.status(400).json({ success: false, error: 'La dirección es requerida' });
+        }
+        const [existe] = await db.execute('SELECT id FROM matriz_secciones WHERE id = ?', [id]);
+        if (existe.length === 0) {
+            return res.status(404).json({ success: false, error: 'Sección no encontrada' });
+        }
+        await db.execute(
+            'INSERT INTO matriz_seccion_direcciones (seccion_id, direccion_id) VALUES (?, ?)',
+            [id, direccion_id]
+        );
+        res.status(201).json({ success: true, message: 'Dirección asignada a la sección' });
+    } catch (error) {
+        if (error.code === 'ER_DUP_ENTRY') {
+            return res.status(400).json({ success: false, error: 'La dirección ya está asignada a esta sección' });
+        }
+        console.error('Error al asignar dirección:', error);
+        res.status(500).json({ success: false, error: 'Error al asignar la dirección' });
+    }
+});
+
+router.delete('/matriz-secciones/:id/direcciones/:direccionId', async (req, res) => {
+    try {
+        const { id, direccionId } = req.params;
+        const [result] = await db.execute(
+            'DELETE FROM matriz_seccion_direcciones WHERE seccion_id = ? AND direccion_id = ?',
+            [id, direccionId]
+        );
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, error: 'Asignación no encontrada' });
+        }
+        res.json({ success: true, message: 'Dirección quitada de la sección' });
+    } catch (error) {
+        console.error('Error al quitar dirección:', error);
+        res.status(500).json({ success: false, error: 'Error al quitar la dirección' });
+    }
+});
+
 module.exports = router;
