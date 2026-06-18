@@ -1651,4 +1651,46 @@ router.delete('/matriz-secciones/:id/direcciones/:direccionId', async (req, res)
     }
 });
 
+// ========== MATRIZ DE INDICADORES - DATOS DE ENCABEZADO ==========
+
+router.get('/matriz-encabezado', async (req, res) => {
+    try {
+        let [rows] = await db.execute('SELECT * FROM matriz_encabezado LIMIT 1');
+        if (rows.length === 0) {
+            const [result] = await db.execute(
+                'INSERT INTO matriz_encabezado (codigo, revision, fecha_actualizacion, fecha_revision_indicadores, responsable, anio) VALUES (\'\', \'\', \'\', \'\', \'\', \'\')'
+            );
+            const [newRows] = await db.execute('SELECT * FROM matriz_encabezado WHERE id = ?', [result.insertId]);
+            rows = newRows;
+        }
+        res.json({ success: true, data: rows[0] });
+    } catch (error) {
+        console.error('Error al obtener encabezado:', error);
+        res.status(500).json({ success: false, error: 'Error al obtener encabezado' });
+    }
+});
+
+router.put('/matriz-encabezado', async (req, res) => {
+    try {
+        const { codigo, revision, fecha_actualizacion, fecha_revision_indicadores, responsable, anio } = req.body;
+        let [rows] = await db.execute('SELECT id FROM matriz_encabezado LIMIT 1');
+        if (rows.length === 0) {
+            const [result] = await db.execute(
+                'INSERT INTO matriz_encabezado (codigo, revision, fecha_actualizacion, fecha_revision_indicadores, responsable, anio) VALUES (?, ?, ?, ?, ?, ?)',
+                [codigo || '', revision || '', fecha_actualizacion || '', fecha_revision_indicadores || '', responsable || '', anio || '']
+            );
+        } else {
+            await db.execute(
+                'UPDATE matriz_encabezado SET codigo = ?, revision = ?, fecha_actualizacion = ?, fecha_revision_indicadores = ?, responsable = ?, anio = ? WHERE id = ?',
+                [codigo || '', revision || '', fecha_actualizacion || '', fecha_revision_indicadores || '', responsable || '', anio || '', rows[0].id]
+            );
+        }
+        const [updated] = await db.execute('SELECT * FROM matriz_encabezado LIMIT 1');
+        res.json({ success: true, data: updated[0], message: 'Encabezado guardado' });
+    } catch (error) {
+        console.error('Error al guardar encabezado:', error);
+        res.status(500).json({ success: false, error: 'Error al guardar encabezado' });
+    }
+});
+
 module.exports = router;
