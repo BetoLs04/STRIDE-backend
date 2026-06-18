@@ -1761,16 +1761,38 @@ router.put('/matriz-columnas/:id/alineacion', async (req, res) => {
 router.put('/matriz-columnas/:id/toggle', async (req, res) => {
     try {
         const { id } = req.params;
-        const [columna] = await db.execute('SELECT activa FROM matriz_columnas WHERE id = ?', [id]);
+        const [columna] = await db.execute('SELECT bloqueada FROM matriz_columnas WHERE id = ?', [id]);
         if (columna.length === 0) {
             return res.status(404).json({ success: false, error: 'Columna no encontrada' });
         }
-        const nuevaActiva = columna[0].activa ? 0 : 1;
-        await db.execute('UPDATE matriz_columnas SET activa = ? WHERE id = ?', [nuevaActiva, id]);
-        res.json({ success: true, message: nuevaActiva ? 'Columna habilitada' : 'Columna inhabilitada', activa: !!nuevaActiva });
+        const nuevaBloqueada = columna[0].bloqueada ? 0 : 1;
+        await db.execute('UPDATE matriz_columnas SET bloqueada = ? WHERE id = ?', [nuevaBloqueada, id]);
+        res.json({ success: true, message: nuevaBloqueada ? 'Columna bloqueada' : 'Columna desbloqueada', bloqueada: !!nuevaBloqueada });
     } catch (error) {
         console.error('Error al toggle columna:', error);
         res.status(500).json({ success: false, error: 'Error al cambiar estado de la columna' });
+    }
+});
+
+const CAMPOS_BLOQUEO = ['bloqueo_1er_cuatrimestre', 'bloqueo_2do_cuatrimestre', 'bloqueo_3er_cuatrimestre', 'bloqueo_anual'];
+
+router.put('/matriz-encabezado/toggle-bloqueo/:campo', async (req, res) => {
+    try {
+        const { campo } = req.params;
+        if (!CAMPOS_BLOQUEO.includes(campo)) {
+            return res.status(400).json({ success: false, error: 'Campo de bloqueo inválido' });
+        }
+        let [rows] = await db.execute(`SELECT id, ${campo} FROM matriz_encabezado LIMIT 1`);
+        if (rows.length === 0) {
+            const [result] = await db.execute('INSERT INTO matriz_encabezado (codigo) VALUES (\'\')');
+            rows = [{ id: result.insertId, [campo]: 0 }];
+        }
+        const nuevoValor = rows[0][campo] ? 0 : 1;
+        await db.execute(`UPDATE matriz_encabezado SET ${campo} = ? WHERE id = ?`, [nuevoValor, rows[0].id]);
+        res.json({ success: true, [campo]: !!nuevoValor, message: nuevoValor ? 'Columna bloqueada' : 'Columna desbloqueada' });
+    } catch (error) {
+        console.error('Error al toggle bloqueo:', error);
+        res.status(500).json({ success: false, error: 'Error al cambiar bloqueo' });
     }
 });
 

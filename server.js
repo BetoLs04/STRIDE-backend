@@ -6,6 +6,31 @@ const path = require('path');
 const fs = require('fs');
 const { execSync } = require('child_process');
 
+const db = require('./config/database');
+
+async function runMigrations() {
+    try {
+        await db.execute('ALTER TABLE matriz_columnas ADD COLUMN bloqueada TINYINT(1) DEFAULT 0 AFTER activa');
+        console.log('✅ Columna bloqueada agregada a matriz_columnas');
+    } catch (_) {}
+    try {
+        await db.execute('ALTER TABLE matriz_encabezado ADD COLUMN bloqueo_1er_cuatrimestre TINYINT(1) DEFAULT 0');
+        console.log('✅ Columna bloqueo_1er_cuatrimestre agregada a matriz_encabezado');
+    } catch (_) {}
+    try {
+        await db.execute('ALTER TABLE matriz_encabezado ADD COLUMN bloqueo_2do_cuatrimestre TINYINT(1) DEFAULT 0');
+        console.log('✅ Columna bloqueo_2do_cuatrimestre agregada a matriz_encabezado');
+    } catch (_) {}
+    try {
+        await db.execute('ALTER TABLE matriz_encabezado ADD COLUMN bloqueo_3er_cuatrimestre TINYINT(1) DEFAULT 0');
+        console.log('✅ Columna bloqueo_3er_cuatrimestre agregada a matriz_encabezado');
+    } catch (_) {}
+    try {
+        await db.execute('ALTER TABLE matriz_encabezado ADD COLUMN bloqueo_anual TINYINT(1) DEFAULT 0');
+        console.log('✅ Columna bloqueo_anual agregada a matriz_encabezado');
+    } catch (_) {}
+}
+
 const app = express();
 //Puerto
 const PORT = process.env.PORT || 5000;
@@ -117,9 +142,11 @@ app.get('/check-uploads', (req, res) => {
     });
 });
 
-app.listen(PORT, () => {
+runMigrations().then(() => {
+    app.listen(PORT, () => {
     console.log(`🎓 Sistema Universitario corriendo en puerto ${PORT}`);
     console.log(`📁 Servidor de archivos en: https://api1.strideutmat.com/uploads/`);
     console.log(`📂 Ruta física: ${path.join(__dirname, 'uploads')}`);
     console.log(`🔗 Es symlink: ${fs.lstatSync(path.join(__dirname, 'uploads')).isSymbolicLink()}`);
+    });
 });
