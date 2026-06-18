@@ -1737,6 +1737,22 @@ router.put('/matriz-columnas/:id', async (req, res) => {
     }
 });
 
+router.patch('/matriz-columnas/:id/toggle', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const [columna] = await db.execute('SELECT activa FROM matriz_columnas WHERE id = ?', [id]);
+        if (columna.length === 0) {
+            return res.status(404).json({ success: false, error: 'Columna no encontrada' });
+        }
+        const nuevaActiva = columna[0].activa ? 0 : 1;
+        await db.execute('UPDATE matriz_columnas SET activa = ? WHERE id = ?', [nuevaActiva, id]);
+        res.json({ success: true, message: nuevaActiva ? 'Columna habilitada' : 'Columna inhabilitada', activa: !!nuevaActiva });
+    } catch (error) {
+        console.error('Error al toggle columna:', error);
+        res.status(500).json({ success: false, error: 'Error al cambiar estado de la columna' });
+    }
+});
+
 router.delete('/matriz-columnas/:id', async (req, res) => {
     try {
         const { id } = req.params;
