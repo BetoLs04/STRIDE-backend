@@ -1737,7 +1737,7 @@ router.put('/matriz-columnas/:id', async (req, res) => {
     }
 });
 
-router.patch('/matriz-columnas/:id/toggle', async (req, res) => {
+router.put('/matriz-columnas/:id/toggle', async (req, res) => {
     try {
         const { id } = req.params;
         const [columna] = await db.execute('SELECT activa FROM matriz_columnas WHERE id = ?', [id]);
