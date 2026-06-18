@@ -1774,7 +1774,7 @@ router.put('/matriz-columnas/:id/toggle', async (req, res) => {
     }
 });
 
-const CAMPOS_BLOQUEO = ['bloqueo_1er_cuatrimestre', 'bloqueo_2do_cuatrimestre', 'bloqueo_3er_cuatrimestre', 'bloqueo_anual'];
+const CAMPOS_BLOQUEO = ['bloqueo_1er_cuatrimestre', 'bloqueo_2do_cuatrimestre', 'bloqueo_3er_cuatrimestre', 'bloqueo_filas'];
 
 router.put('/matriz-encabezado/toggle-bloqueo/:campo', async (req, res) => {
     try {

@@ -29,6 +29,10 @@ async function runMigrations() {
         await db.execute('ALTER TABLE matriz_encabezado ADD COLUMN bloqueo_anual TINYINT(1) DEFAULT 0');
         console.log('✅ Columna bloqueo_anual agregada a matriz_encabezado');
     } catch (_) {}
+    try {
+        await db.execute('ALTER TABLE matriz_encabezado ADD COLUMN bloqueo_filas TINYINT(1) DEFAULT 0');
+        console.log('✅ Columna bloqueo_filas agregada a matriz_encabezado');
+    } catch (_) {}
 }
 
 const app = express();
