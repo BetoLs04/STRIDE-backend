@@ -1693,4 +1693,62 @@ router.put('/matriz-encabezado', async (req, res) => {
     }
 });
 
+// ========== MATRIZ DE INDICADORES - NOMBRE DE COLUMNAS ==========
+
+router.get('/matriz-columnas', async (req, res) => {
+    try {
+        const [columnas] = await db.execute('SELECT * FROM matriz_columnas ORDER BY orden ASC, id ASC');
+        res.json({ success: true, data: columnas });
+    } catch (error) {
+        console.error('Error al obtener columnas:', error);
+        res.status(500).json({ success: false, error: 'Error al obtener columnas' });
+    }
+});
+
+router.post('/matriz-columnas', async (req, res) => {
+    try {
+        const { nombre } = req.body;
+        if (!nombre || !nombre.trim()) {
+            return res.status(400).json({ success: false, error: 'El nombre es requerido' });
+        }
+        const [result] = await db.execute('INSERT INTO matriz_columnas (nombre) VALUES (?)', [nombre.trim()]);
+        res.status(201).json({ success: true, message: 'Columna creada', columnaId: result.insertId });
+    } catch (error) {
+        console.error('Error al crear columna:', error);
+        res.status(500).json({ success: false, error: 'Error al crear la columna' });
+    }
+});
+
+router.put('/matriz-columnas/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { nombre } = req.body;
+        if (!nombre || !nombre.trim()) {
+            return res.status(400).json({ success: false, error: 'El nombre es requerido' });
+        }
+        const [result] = await db.execute('UPDATE matriz_columnas SET nombre = ? WHERE id = ?', [nombre.trim(), id]);
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, error: 'Columna no encontrada' });
+        }
+        res.json({ success: true, message: 'Columna actualizada' });
+    } catch (error) {
+        console.error('Error al actualizar columna:', error);
+        res.status(500).json({ success: false, error: 'Error al actualizar la columna' });
+    }
+});
+
+router.delete('/matriz-columnas/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const [result] = await db.execute('DELETE FROM matriz_columnas WHERE id = ?', [id]);
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, error: 'Columna no encontrada' });
+        }
+        res.json({ success: true, message: 'Columna eliminada' });
+    } catch (error) {
+        console.error('Error al eliminar columna:', error);
+        res.status(500).json({ success: false, error: 'Error al eliminar la columna' });
+    }
+});
+
 module.exports = router;
