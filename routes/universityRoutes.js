@@ -1767,4 +1767,76 @@ router.delete('/matriz-columnas/:id', async (req, res) => {
     }
 });
 
+// ========== MATRIZ DE INDICADORES - FILAS DE DATOS ==========
+
+router.get('/matriz-filas/:seccionId', async (req, res) => {
+    try {
+        const { seccionId } = req.params;
+        const { direccion_id } = req.query;
+        let query = 'SELECT * FROM matriz_filas WHERE seccion_id = ?';
+        let params = [seccionId];
+        if (direccion_id) {
+            query += ' AND direccion_id = ?';
+            params.push(direccion_id);
+        }
+        query += ' ORDER BY orden ASC, id ASC';
+        const [filas] = await db.execute(query, params);
+        res.json({ success: true, data: filas });
+    } catch (error) {
+        console.error('Error al obtener filas:', error);
+        res.status(500).json({ success: false, error: 'Error al obtener filas' });
+    }
+});
+
+router.post('/matriz-filas', async (req, res) => {
+    try {
+        const { seccion_id, direccion_id, valores } = req.body;
+        if (!seccion_id) {
+            return res.status(400).json({ success: false, error: 'La sección es requerida' });
+        }
+        const [result] = await db.execute(
+            'INSERT INTO matriz_filas (seccion_id, direccion_id, valores) VALUES (?, ?, ?)',
+            [seccion_id, direccion_id || null, JSON.stringify(valores || {})]
+        );
+        const [nueva] = await db.execute('SELECT * FROM matriz_filas WHERE id = ?', [result.insertId]);
+        res.status(201).json({ success: true, data: nueva[0], message: 'Fila agregada' });
+    } catch (error) {
+        console.error('Error al crear fila:', error);
+        res.status(500).json({ success: false, error: 'Error al crear la fila' });
+    }
+});
+
+router.put('/matriz-filas/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { valores } = req.body;
+        const [result] = await db.execute(
+            'UPDATE matriz_filas SET valores = ? WHERE id = ?',
+            [JSON.stringify(valores || {}), id]
+        );
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, error: 'Fila no encontrada' });
+        }
+        const [updated] = await db.execute('SELECT * FROM matriz_filas WHERE id = ?', [id]);
+        res.json({ success: true, data: updated[0], message: 'Fila actualizada' });
+    } catch (error) {
+        console.error('Error al actualizar fila:', error);
+        res.status(500).json({ success: false, error: 'Error al actualizar la fila' });
+    }
+});
+
+router.delete('/matriz-filas/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const [result] = await db.execute('DELETE FROM matriz_filas WHERE id = ?', [id]);
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, error: 'Fila no encontrada' });
+        }
+        res.json({ success: true, message: 'Fila eliminada' });
+    } catch (error) {
+        console.error('Error al eliminar fila:', error);
+        res.status(500).json({ success: false, error: 'Error al eliminar la fila' });
+    }
+});
+
 module.exports = router;
