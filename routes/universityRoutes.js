@@ -1739,7 +1739,7 @@ router.put('/matriz-columnas/:id', async (req, res) => {
     }
 });
 
-router.patch('/matriz-columnas/:id/alineacion', async (req, res) => {
+router.put('/matriz-columnas/:id/alineacion', async (req, res) => {
     try {
         const { id } = req.params;
         const { alineacion } = req.body;
