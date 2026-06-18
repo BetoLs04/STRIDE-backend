@@ -1722,18 +1722,39 @@ router.post('/matriz-columnas', async (req, res) => {
 router.put('/matriz-columnas/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { nombre } = req.body;
+        const { nombre, alineacion } = req.body;
         if (!nombre || !nombre.trim()) {
             return res.status(400).json({ success: false, error: 'El nombre es requerido' });
         }
-        const [result] = await db.execute('UPDATE matriz_columnas SET nombre = ? WHERE id = ?', [nombre.trim(), id]);
+        const alineacionVal = ['left', 'center', 'right'].includes(alineacion) ? alineacion : 'center';
+        const [result] = await db.execute('UPDATE matriz_columnas SET nombre = ?, alineacion = ? WHERE id = ?', [nombre.trim(), alineacionVal, id]);
         if (result.affectedRows === 0) {
             return res.status(404).json({ success: false, error: 'Columna no encontrada' });
         }
-        res.json({ success: true, message: 'Columna actualizada' });
+        const [updated] = await db.execute('SELECT * FROM matriz_columnas WHERE id = ?', [id]);
+        res.json({ success: true, data: updated[0], message: 'Columna actualizada' });
     } catch (error) {
         console.error('Error al actualizar columna:', error);
         res.status(500).json({ success: false, error: 'Error al actualizar la columna' });
+    }
+});
+
+router.patch('/matriz-columnas/:id/alineacion', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { alineacion } = req.body;
+        if (!['left', 'center', 'right'].includes(alineacion)) {
+            return res.status(400).json({ success: false, error: 'Alineación inválida' });
+        }
+        const [result] = await db.execute('UPDATE matriz_columnas SET alineacion = ? WHERE id = ?', [alineacion, id]);
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, error: 'Columna no encontrada' });
+        }
+        const [updated] = await db.execute('SELECT * FROM matriz_columnas WHERE id = ?', [id]);
+        res.json({ success: true, data: updated[0], message: 'Alineación actualizada' });
+    } catch (error) {
+        console.error('Error al actualizar alineación:', error);
+        res.status(500).json({ success: false, error: 'Error al actualizar alineación' });
     }
 });
 
