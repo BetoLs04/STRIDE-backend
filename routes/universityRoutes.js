@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
+const { getIO } = require('../config/socket');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const path = require('path');
@@ -1751,6 +1752,8 @@ router.put('/matriz-columnas/:id/alineacion', async (req, res) => {
             return res.status(404).json({ success: false, error: 'Columna no encontrada' });
         }
         const [updated] = await db.execute('SELECT * FROM matriz_columnas WHERE id = ?', [id]);
+        const io = getIO();
+        if (io) io.emit('matriz-update', { type: 'alineacion-change', columnaId: parseInt(id) });
         res.json({ success: true, data: updated[0], message: 'Alineación actualizada' });
     } catch (error) {
         console.error('Error al actualizar alineación:', error);
@@ -1767,6 +1770,8 @@ router.put('/matriz-columnas/:id/toggle', async (req, res) => {
         }
         const nuevaBloqueada = columna[0].bloqueada ? 0 : 1;
         await db.execute('UPDATE matriz_columnas SET bloqueada = ? WHERE id = ?', [nuevaBloqueada, id]);
+        const io = getIO();
+        if (io) io.emit('matriz-update', { type: 'columna-toggle', columnaId: parseInt(id) });
         res.json({ success: true, message: nuevaBloqueada ? 'Columna bloqueada' : 'Columna desbloqueada', bloqueada: !!nuevaBloqueada });
     } catch (error) {
         console.error('Error al toggle columna:', error);
@@ -1789,6 +1794,8 @@ router.put('/matriz-encabezado/toggle-bloqueo/:campo', async (req, res) => {
         }
         const nuevoValor = rows[0][campo] ? 0 : 1;
         await db.execute(`UPDATE matriz_encabezado SET ${campo} = ? WHERE id = ?`, [nuevoValor, rows[0].id]);
+        const io = getIO();
+        if (io) io.emit('matriz-update', { type: 'bloqueo-change', campo });
         res.json({ success: true, [campo]: !!nuevoValor, message: nuevoValor ? 'Columna bloqueada' : 'Columna desbloqueada' });
     } catch (error) {
         console.error('Error al toggle bloqueo:', error);

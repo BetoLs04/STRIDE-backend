@@ -1,4 +1,6 @@
 const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
 const cors = require('cors');
 require('dotenv').config();
 const universityRoutes = require('./routes/universityRoutes');
@@ -7,6 +9,7 @@ const fs = require('fs');
 const { execSync } = require('child_process');
 
 const db = require('./config/database');
+const { setIO } = require('./config/socket');
 
 async function runMigrations() {
     try {
@@ -101,6 +104,23 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
 }));
 
 // Rutas
+const server = http.createServer(app);
+const io = new Server(server, {
+    cors: {
+        origin: 'https://strideutmat.com',
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+        credentials: true
+    }
+});
+setIO(io);
+
+io.on('connection', (socket) => {
+    console.log('⚡ Cliente conectado:', socket.id);
+    socket.on('disconnect', () => {
+        console.log('⚡ Cliente desconectado:', socket.id);
+    });
+});
+
 app.use('/api/university', universityRoutes);
 
 // Ruta de prueba
@@ -147,7 +167,7 @@ app.get('/check-uploads', (req, res) => {
 });
 
 runMigrations().then(() => {
-    app.listen(PORT, () => {
+    server.listen(PORT, () => {
     console.log(`🎓 Sistema Universitario corriendo en puerto ${PORT}`);
     console.log(`📁 Servidor de archivos en: https://api1.strideutmat.com/uploads/`);
     console.log(`📂 Ruta física: ${path.join(__dirname, 'uploads')}`);
