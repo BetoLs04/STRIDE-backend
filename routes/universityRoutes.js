@@ -1533,27 +1533,46 @@ router.delete('/personal/:id', async (req, res) => {
     }
 });
 
+// ========== MATRIZ DE INDICADORES - USUARIOS DISPONIBLES ==========
+
+router.get('/matriz-usuarios', async (req, res) => {
+    try {
+        const [directivos] = await db.execute('SELECT id, nombre_completo as nombre, direccion_id FROM directivos ORDER BY nombre_completo');
+        const [personal] = await db.execute('SELECT id, nombre_completo as nombre, direccion_id FROM personal ORDER BY nombre_completo');
+        const directivosConTipo = directivos.map(d => ({ ...d, tipo: 'directivo' }));
+        const personalConTipo = personal.map(p => ({ ...p, tipo: 'personal' }));
+        res.json({ success: true, data: [...directivosConTipo, ...personalConTipo] });
+    } catch (error) {
+        console.error('Error al obtener usuarios:', error);
+        res.status(500).json({ success: false, error: 'Error al obtener usuarios' });
+    }
+});
+
 // ========== MATRIZ DE INDICADORES - SECCIONES ==========
 
 router.get('/matriz-secciones', async (req, res) => {
     try {
         const [secciones] = await db.execute(`
             SELECT ms.*,
-                   COUNT(msd.direccion_id) AS total_direcciones
+                   COUNT(msu.id) AS total_usuarios
             FROM matriz_secciones ms
-            LEFT JOIN matriz_seccion_direcciones msd ON ms.id = msd.seccion_id
+            LEFT JOIN matriz_seccion_usuarios msu ON ms.id = msu.seccion_id
             GROUP BY ms.id
             ORDER BY ms.nombre
         `);
         for (let seccion of secciones) {
-            const [direcciones] = await db.execute(`
-                SELECT d.id, d.nombre
-                FROM direcciones d
-                INNER JOIN matriz_seccion_direcciones msd ON d.id = msd.direccion_id
-                WHERE msd.seccion_id = ?
-                ORDER BY d.nombre
+            const [usuarios] = await db.execute(`
+                SELECT msu.id as asignacion_id, msu.usuario_id, msu.usuario_tipo,
+                       CASE WHEN msu.usuario_tipo = 'directivo' THEN d.nombre_completo
+                            WHEN msu.usuario_tipo = 'personal' THEN p.nombre_completo
+                       END as nombre
+                FROM matriz_seccion_usuarios msu
+                LEFT JOIN directivos d ON msu.usuario_id = d.id AND msu.usuario_tipo = 'directivo'
+                LEFT JOIN personal p ON msu.usuario_id = p.id AND msu.usuario_tipo = 'personal'
+                WHERE msu.seccion_id = ?
+                ORDER BY nombre
             `, [seccion.id]);
-            seccion.direcciones = direcciones;
+            seccion.usuarios = usuarios;
         }
         res.json({ success: true, data: secciones });
     } catch (error) {
@@ -1608,47 +1627,53 @@ router.delete('/matriz-secciones/:id', async (req, res) => {
     }
 });
 
-// ========== MATRIZ DE INDICADORES - ASIGNACIÓN DE DIRECCIONES ==========
+// ========== MATRIZ DE INDICADORES - ASIGNACIÓN DE USUARIOS ==========
 
-router.post('/matriz-secciones/:id/direcciones', async (req, res) => {
+router.post('/matriz-secciones/:id/usuarios', async (req, res) => {
     try {
         const { id } = req.params;
-        const { direccion_id } = req.body;
-        if (!direccion_id) {
-            return res.status(400).json({ success: false, error: 'La dirección es requerida' });
+        const { usuario_id, usuario_tipo } = req.body;
+        if (!usuario_id || !usuario_tipo) {
+            return res.status(400).json({ success: false, error: 'El usuario y tipo son requeridos' });
+        }
+        if (!['directivo', 'personal'].includes(usuario_tipo)) {
+            return res.status(400).json({ success: false, error: 'Tipo de usuario inválido' });
         }
         const [existe] = await db.execute('SELECT id FROM matriz_secciones WHERE id = ?', [id]);
         if (existe.length === 0) {
             return res.status(404).json({ success: false, error: 'Sección no encontrada' });
         }
         await db.execute(
-            'INSERT INTO matriz_seccion_direcciones (seccion_id, direccion_id) VALUES (?, ?)',
-            [id, direccion_id]
+            'INSERT INTO matriz_seccion_usuarios (seccion_id, usuario_id, usuario_tipo) VALUES (?, ?, ?)',
+            [id, usuario_id, usuario_tipo]
         );
-        res.status(201).json({ success: true, message: 'Dirección asignada a la sección' });
+        res.status(201).json({ success: true, message: 'Usuario asignado a la sección' });
     } catch (error) {
         if (error.code === 'ER_DUP_ENTRY') {
-            return res.status(400).json({ success: false, error: 'La dirección ya está asignada a esta sección' });
+            return res.status(400).json({ success: false, error: 'El usuario ya está asignado a esta sección' });
         }
-        console.error('Error al asignar dirección:', error);
-        res.status(500).json({ success: false, error: 'Error al asignar la dirección' });
+        console.error('Error al asignar usuario:', error);
+        res.status(500).json({ success: false, error: 'Error al asignar el usuario' });
     }
 });
 
-router.delete('/matriz-secciones/:id/direcciones/:direccionId', async (req, res) => {
+router.delete('/matriz-secciones/:id/usuarios/:usuarioId/:usuarioTipo', async (req, res) => {
     try {
-        const { id, direccionId } = req.params;
+        const { id, usuarioId, usuarioTipo } = req.params;
+        if (!['directivo', 'personal'].includes(usuarioTipo)) {
+            return res.status(400).json({ success: false, error: 'Tipo de usuario inválido' });
+        }
         const [result] = await db.execute(
-            'DELETE FROM matriz_seccion_direcciones WHERE seccion_id = ? AND direccion_id = ?',
-            [id, direccionId]
+            'DELETE FROM matriz_seccion_usuarios WHERE seccion_id = ? AND usuario_id = ? AND usuario_tipo = ?',
+            [id, usuarioId, usuarioTipo]
         );
         if (result.affectedRows === 0) {
             return res.status(404).json({ success: false, error: 'Asignación no encontrada' });
         }
-        res.json({ success: true, message: 'Dirección quitada de la sección' });
+        res.json({ success: true, message: 'Usuario quitado de la sección' });
     } catch (error) {
-        console.error('Error al quitar dirección:', error);
-        res.status(500).json({ success: false, error: 'Error al quitar la dirección' });
+        console.error('Error al quitar usuario:', error);
+        res.status(500).json({ success: false, error: 'Error al quitar el usuario' });
     }
 });
 
