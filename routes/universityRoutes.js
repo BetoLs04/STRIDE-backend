@@ -1914,6 +1914,32 @@ router.delete('/matriz-filas/:id', async (req, res) => {
     }
 });
 
+// ========== CONFIGURACIÓN DE MULTER PARA SMOA (solo pptx) ==========
+
+const smoaDir = 'uploads/smoa';
+if (!fs.existsSync(smoaDir)) { fs.mkdirSync(smoaDir, { recursive: true }); }
+
+const smoaStorage = multer.diskStorage({
+    destination: function (req, file, cb) { cb(null, smoaDir); },
+    filename: function (req, file, cb) {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, 'smoa-' + uniqueSuffix + '.pptx');
+    }
+});
+
+const uploadSmoa = multer({
+    storage: smoaStorage,
+    fileFilter: (req, file, cb) => {
+        const ext = path.extname(file.originalname).toLowerCase();
+        if (ext === '.pptx') {
+            cb(null, true);
+        } else {
+            cb(new Error('Solo se permiten archivos .pptx'), false);
+        }
+    },
+    limits: { fileSize: 50 * 1024 * 1024 }
+});
+
 // ========== SMOA - SEGUIMIENTO MENSUAL DE OBJETIVOS ANUALES ==========
 
 router.get('/smoa-encabezado', async (req, res) => {
@@ -2129,6 +2155,33 @@ router.delete('/smoa-filas/:id', async (req, res) => {
     } catch (error) {
         console.error('Error al eliminar fila SMOA:', error);
         res.status(500).json({ success: false, error: 'Error al eliminar la fila' });
+    }
+});
+
+router.post('/smoa-upload', uploadSmoa.single('archivo'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ success: false, error: 'No se recibió ningún archivo' });
+        }
+        res.json({ success: true, filename: req.file.filename, message: 'Archivo subido exitosamente' });
+    } catch (error) {
+        console.error('Error al subir archivo SMOA:', error);
+        res.status(500).json({ success: false, error: error.message || 'Error al subir el archivo' });
+    }
+});
+
+router.get('/smoa-uploads/:filename', (req, res) => {
+    try {
+        const { filename } = req.params;
+        const filePath = path.join(smoaDir, filename);
+        if (fs.existsSync(filePath)) {
+            res.download(filePath, filename);
+        } else {
+            res.status(404).json({ error: 'Archivo no encontrado' });
+        }
+    } catch (error) {
+        console.error('Error al servir archivo SMOA:', error);
+        res.status(500).json({ error: 'Error al cargar el archivo' });
     }
 });
 
