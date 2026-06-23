@@ -2233,4 +2233,60 @@ router.get('/smoa-uploads/:filename', (req, res) => {
     }
 });
 
+// ========== SUBIDA DE IMÁGENES PARA EL EDITOR SMOA ==========
+
+const smoaEditorImgDir = 'uploads/smoa-editor';
+if (!fs.existsSync(smoaEditorImgDir)) { fs.mkdirSync(smoaEditorImgDir, { recursive: true }); }
+
+const smoaEditorStorage = multer.diskStorage({
+    destination: function (req, file, cb) { cb(null, smoaEditorImgDir); },
+    filename: function (req, file, cb) {
+        const ext = path.extname(file.originalname).toLowerCase();
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, 'smoa-img-' + uniqueSuffix + ext);
+    }
+});
+
+const uploadSmoaEditorImg = multer({
+    storage: smoaEditorStorage,
+    fileFilter: (req, file, cb) => {
+        const ext = path.extname(file.originalname).toLowerCase();
+        const allowed = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'];
+        if (allowed.includes(ext)) {
+            cb(null, true);
+        } else {
+            cb(new Error('Solo se permiten imágenes (jpg, png, gif, webp, svg)'), false);
+        }
+    },
+    limits: { fileSize: 10 * 1024 * 1024 }
+});
+
+router.post('/smoa-upload-image', uploadSmoaEditorImg.single('imagen'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ success: false, error: 'No se recibió ninguna imagen' });
+        }
+        const url = `${API_BASE_URL}/api/university/smoa-editor-images/${req.file.filename}`;
+        res.json({ success: true, url, filename: req.file.filename });
+    } catch (error) {
+        console.error('Error al subir imagen:', error);
+        res.status(500).json({ success: false, error: error.message || 'Error al subir imagen' });
+    }
+});
+
+router.get('/smoa-editor-images/:filename', (req, res) => {
+    try {
+        const { filename } = req.params;
+        const filePath = path.join(smoaEditorImgDir, filename);
+        if (fs.existsSync(filePath)) {
+            res.sendFile(filePath);
+        } else {
+            res.status(404).json({ error: 'Imagen no encontrada' });
+        }
+    } catch (error) {
+        console.error('Error al servir imagen:', error);
+        res.status(500).json({ error: 'Error al cargar la imagen' });
+    }
+});
+
 module.exports = router;
