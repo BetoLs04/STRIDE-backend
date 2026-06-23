@@ -2277,7 +2277,7 @@ router.post('/smoa-upload-image', uploadSmoaEditorImg.single('imagen'), async (r
 router.get('/smoa-editor-images/:filename', (req, res) => {
     try {
         const { filename } = req.params;
-        const filePath = path.join(smoaEditorImgDir, filename);
+        const filePath = path.resolve(__dirname, '..', smoaEditorImgDir, filename);
         if (fs.existsSync(filePath)) {
             res.sendFile(filePath);
         } else {
