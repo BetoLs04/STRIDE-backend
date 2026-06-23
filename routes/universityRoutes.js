@@ -2158,6 +2158,54 @@ router.delete('/smoa-filas/:id', async (req, res) => {
     }
 });
 
+// Subida de .pptx para una fila SMOA (un solo request: upload + DB update)
+router.put('/smoa-filas/:id/pptx', (req, res, next) => {
+    const contentType = req.headers['content-type'] || '';
+    if (contentType.includes('multipart/form-data')) {
+        uploadSmoa.single('pptx')(req, res, (err) => {
+            if (err) {
+                if (err.code === 'LIMIT_FILE_SIZE') {
+                    return res.status(400).json({ success: false, error: 'El archivo no puede superar los 50MB' });
+                }
+                return res.status(400).json({ success: false, error: err.message || 'Error al subir el archivo' });
+            }
+            next();
+        });
+    } else {
+        next();
+    }
+}, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const [filas] = await db.execute('SELECT * FROM smoa_filas WHERE id = ?', [id]);
+        if (filas.length === 0) {
+            return res.status(404).json({ success: false, error: 'Fila no encontrada' });
+        }
+        const fila = filas[0];
+        let valores;
+        try {
+            valores = typeof fila.valores === 'string' ? JSON.parse(fila.valores) : (fila.valores || {});
+        } catch {
+            valores = {};
+        }
+
+        if (req.file) {
+            valores.pres_archivo = req.file.filename;
+        } else if (req.body && (req.body.eliminar === true || req.body.eliminar === 'true')) {
+            delete valores.pres_archivo;
+        } else {
+            return res.status(400).json({ success: false, error: 'Envíe un archivo .pptx o { eliminar: true }' });
+        }
+
+        await db.execute('UPDATE smoa_filas SET valores = ? WHERE id = ?', [JSON.stringify(valores), id]);
+        const [updated] = await db.execute('SELECT * FROM smoa_filas WHERE id = ?', [id]);
+        res.json({ success: true, data: updated[0], message: 'Presentación actualizada' });
+    } catch (error) {
+        console.error('Error al actualizar presentación SMOA:', error);
+        res.status(500).json({ success: false, error: 'Error al actualizar presentación' });
+    }
+});
+
 router.post('/smoa-upload', uploadSmoa.single('archivo'), async (req, res) => {
     try {
         if (!req.file) {
