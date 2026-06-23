@@ -1914,4 +1914,222 @@ router.delete('/matriz-filas/:id', async (req, res) => {
     }
 });
 
+// ========== SMOA - SEGUIMIENTO MENSUAL DE OBJETIVOS ANUALES ==========
+
+router.get('/smoa-encabezado', async (req, res) => {
+    try {
+        let [rows] = await db.execute('SELECT * FROM smoa_encabezado LIMIT 1');
+        if (rows.length === 0) {
+            const [result] = await db.execute('INSERT INTO smoa_encabezado (contenido) VALUES (\'\')');
+            const [newRows] = await db.execute('SELECT * FROM smoa_encabezado WHERE id = ?', [result.insertId]);
+            rows = newRows;
+        }
+        res.json({ success: true, data: rows[0] });
+    } catch (error) {
+        console.error('Error al obtener encabezado SMOA:', error);
+        res.status(500).json({ success: false, error: 'Error al obtener encabezado SMOA' });
+    }
+});
+
+router.put('/smoa-encabezado', async (req, res) => {
+    try {
+        const { contenido } = req.body;
+        let [rows] = await db.execute('SELECT id FROM smoa_encabezado LIMIT 1');
+        if (rows.length === 0) {
+            await db.execute('INSERT INTO smoa_encabezado (contenido) VALUES (?)', [contenido || '']);
+        } else {
+            await db.execute('UPDATE smoa_encabezado SET contenido = ? WHERE id = ?', [contenido || '', rows[0].id]);
+        }
+        const [updated] = await db.execute('SELECT * FROM smoa_encabezado LIMIT 1');
+        res.json({ success: true, data: updated[0], message: 'Encabezado SMOA guardado' });
+    } catch (error) {
+        console.error('Error al guardar encabezado SMOA:', error);
+        res.status(500).json({ success: false, error: 'Error al guardar encabezado SMOA' });
+    }
+});
+
+router.get('/smoa-usuarios-disponibles', async (req, res) => {
+    try {
+        const [directivos] = await db.execute('SELECT id, nombre_completo as nombre, direccion_id FROM directivos ORDER BY nombre_completo');
+        const [personal] = await db.execute('SELECT id, nombre_completo as nombre, direccion_id FROM personal ORDER BY nombre_completo');
+        const directivosConTipo = directivos.map(d => ({ ...d, tipo: 'directivo' }));
+        const personalConTipo = personal.map(p => ({ ...p, tipo: 'personal' }));
+        res.json({ success: true, data: [...directivosConTipo, ...personalConTipo] });
+    } catch (error) {
+        console.error('Error al obtener usuarios SMOA:', error);
+        res.status(500).json({ success: false, error: 'Error al obtener usuarios' });
+    }
+});
+
+router.get('/smoa-usuarios', async (req, res) => {
+    try {
+        const [usuarios] = await db.execute(`
+            SELECT su.id as asignacion_id, su.usuario_id, su.usuario_tipo,
+                   CASE WHEN su.usuario_tipo = 'directivo' THEN d.nombre_completo
+                        WHEN su.usuario_tipo = 'personal' THEN p.nombre_completo
+                   END as nombre
+            FROM smoa_usuarios su
+            LEFT JOIN directivos d ON su.usuario_id = d.id AND su.usuario_tipo = 'directivo'
+            LEFT JOIN personal p ON su.usuario_id = p.id AND su.usuario_tipo = 'personal'
+            ORDER BY nombre
+        `);
+        res.json({ success: true, data: usuarios });
+    } catch (error) {
+        console.error('Error al obtener usuarios asignados SMOA:', error);
+        res.status(500).json({ success: false, error: 'Error al obtener usuarios asignados' });
+    }
+});
+
+router.post('/smoa-usuarios', async (req, res) => {
+    try {
+        const { usuario_id, usuario_tipo } = req.body;
+        if (!usuario_id || !usuario_tipo) {
+            return res.status(400).json({ success: false, error: 'El usuario y tipo son requeridos' });
+        }
+        if (!['directivo', 'personal'].includes(usuario_tipo)) {
+            return res.status(400).json({ success: false, error: 'Tipo de usuario inválido' });
+        }
+        await db.execute(
+            'INSERT INTO smoa_usuarios (usuario_id, usuario_tipo) VALUES (?, ?)',
+            [usuario_id, usuario_tipo]
+        );
+        res.status(201).json({ success: true, message: 'Usuario asignado a SMOA' });
+    } catch (error) {
+        if (error.code === 'ER_DUP_ENTRY') {
+            return res.status(400).json({ success: false, error: 'El usuario ya está asignado' });
+        }
+        console.error('Error al asignar usuario SMOA:', error);
+        res.status(500).json({ success: false, error: 'Error al asignar el usuario' });
+    }
+});
+
+router.delete('/smoa-usuarios/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const [result] = await db.execute('DELETE FROM smoa_usuarios WHERE id = ?', [id]);
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, error: 'Asignación no encontrada' });
+        }
+        res.json({ success: true, message: 'Usuario quitado de SMOA' });
+    } catch (error) {
+        console.error('Error al quitar usuario SMOA:', error);
+        res.status(500).json({ success: false, error: 'Error al quitar el usuario' });
+    }
+});
+
+router.get('/smoa-columnas', async (req, res) => {
+    try {
+        const [columnas] = await db.execute('SELECT * FROM smoa_columnas ORDER BY orden ASC, id ASC');
+        res.json({ success: true, data: columnas });
+    } catch (error) {
+        console.error('Error al obtener columnas SMOA:', error);
+        res.status(500).json({ success: false, error: 'Error al obtener columnas' });
+    }
+});
+
+router.post('/smoa-columnas', async (req, res) => {
+    try {
+        const { nombre } = req.body;
+        if (!nombre || !nombre.trim()) {
+            return res.status(400).json({ success: false, error: 'El nombre es requerido' });
+        }
+        const [result] = await db.execute('INSERT INTO smoa_columnas (nombre) VALUES (?)', [nombre.trim()]);
+        res.status(201).json({ success: true, message: 'Columna SMOA creada', columnaId: result.insertId });
+    } catch (error) {
+        console.error('Error al crear columna SMOA:', error);
+        res.status(500).json({ success: false, error: 'Error al crear la columna' });
+    }
+});
+
+router.put('/smoa-columnas/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { nombre } = req.body;
+        if (!nombre || !nombre.trim()) {
+            return res.status(400).json({ success: false, error: 'El nombre es requerido' });
+        }
+        const [result] = await db.execute('UPDATE smoa_columnas SET nombre = ? WHERE id = ?', [nombre.trim(), id]);
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, error: 'Columna no encontrada' });
+        }
+        const [updated] = await db.execute('SELECT * FROM smoa_columnas WHERE id = ?', [id]);
+        res.json({ success: true, data: updated[0], message: 'Columna SMOA actualizada' });
+    } catch (error) {
+        console.error('Error al actualizar columna SMOA:', error);
+        res.status(500).json({ success: false, error: 'Error al actualizar la columna' });
+    }
+});
+
+router.delete('/smoa-columnas/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const [result] = await db.execute('DELETE FROM smoa_columnas WHERE id = ?', [id]);
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, error: 'Columna no encontrada' });
+        }
+        res.json({ success: true, message: 'Columna SMOA eliminada' });
+    } catch (error) {
+        console.error('Error al eliminar columna SMOA:', error);
+        res.status(500).json({ success: false, error: 'Error al eliminar la columna' });
+    }
+});
+
+router.get('/smoa-filas', async (req, res) => {
+    try {
+        const [filas] = await db.execute('SELECT * FROM smoa_filas ORDER BY orden ASC, id ASC');
+        res.json({ success: true, data: filas });
+    } catch (error) {
+        console.error('Error al obtener filas SMOA:', error);
+        res.status(500).json({ success: false, error: 'Error al obtener filas' });
+    }
+});
+
+router.post('/smoa-filas', async (req, res) => {
+    try {
+        const { valores } = req.body;
+        const [result] = await db.execute(
+            'INSERT INTO smoa_filas (valores) VALUES (?)',
+            [JSON.stringify(valores || {})]
+        );
+        const [nueva] = await db.execute('SELECT * FROM smoa_filas WHERE id = ?', [result.insertId]);
+        res.status(201).json({ success: true, data: nueva[0], message: 'Fila SMOA agregada' });
+    } catch (error) {
+        console.error('Error al crear fila SMOA:', error);
+        res.status(500).json({ success: false, error: 'Error al crear la fila' });
+    }
+});
+
+router.put('/smoa-filas/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { valores } = req.body;
+        const [result] = await db.execute(
+            'UPDATE smoa_filas SET valores = ? WHERE id = ?',
+            [JSON.stringify(valores || {}), id]
+        );
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, error: 'Fila no encontrada' });
+        }
+        const [updated] = await db.execute('SELECT * FROM smoa_filas WHERE id = ?', [id]);
+        res.json({ success: true, data: updated[0], message: 'Fila SMOA actualizada' });
+    } catch (error) {
+        console.error('Error al actualizar fila SMOA:', error);
+        res.status(500).json({ success: false, error: 'Error al actualizar la fila' });
+    }
+});
+
+router.delete('/smoa-filas/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const [result] = await db.execute('DELETE FROM smoa_filas WHERE id = ?', [id]);
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, error: 'Fila no encontrada' });
+        }
+        res.json({ success: true, message: 'Fila SMOA eliminada' });
+    } catch (error) {
+        console.error('Error al eliminar fila SMOA:', error);
+        res.status(500).json({ success: false, error: 'Error al eliminar la fila' });
+    }
+});
+
 module.exports = router;
