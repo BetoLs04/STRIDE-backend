@@ -6,6 +6,7 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { generateToken, verifyToken } = require('../middleware/auth');
 
 const API_BASE_URL = process.env.API_URL || 'https://api1.strideutmat.com';
 
@@ -118,8 +119,9 @@ router.post('/login', async (req, res) => {
             id: user.id, username: user.username, email: user.email,
             tipo: 'superadmin', created_at: user.created_at
         };
+        const token = generateToken(userResponse);
         console.log('✅ Login exitoso para:', user.email);
-        res.json({ success: true, message: 'Login exitoso', user: userResponse });
+        res.json({ success: true, message: 'Login exitoso', user: userResponse, token });
     } catch (error) {
         console.error('Error en login:', error);
         res.status(500).json({ success: false, error: 'Error en el servidor' });
@@ -175,8 +177,9 @@ router.post('/login-general', async (req, res) => {
         if (!user) {
             return res.status(401).json({ success: false, error: 'Credenciales inválidas' });
         }
+        const token = generateToken(user);
         console.log('✅ Login exitoso para:', user.email, 'Tipo:', userType);
-        res.json({ success: true, message: 'Login exitoso', user: user, userType: userType });
+        res.json({ success: true, message: 'Login exitoso', user: user, userType: userType, token });
     } catch (error) {
         console.error('Error en login general:', error);
         res.status(500).json({ success: false, error: 'Error en el servidor' });
@@ -192,6 +195,8 @@ router.get('/superusers', async (req, res) => {
         res.status(500).json({ success: false, error: 'Error al obtener usuarios' });
     }
 });
+
+router.use(verifyToken);
 
 router.get('/estadisticas', async (req, res) => {
     try {
