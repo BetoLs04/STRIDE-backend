@@ -1986,12 +1986,18 @@ router.get('/smoa-encabezado', async (req, res) => {
 
 router.put('/smoa-encabezado', async (req, res) => {
     try {
-        const { contenido } = req.body;
-        let [rows] = await db.execute('SELECT id FROM smoa_encabezado LIMIT 1');
+        const { contenido, imagen } = req.body;
+        let [rows] = await db.execute('SELECT * FROM smoa_encabezado LIMIT 1');
+        const oldImagen = rows[0]?.imagen;
+        const finalImagen = imagen === undefined ? oldImagen : (imagen || null);
         if (rows.length === 0) {
-            await db.execute('INSERT INTO smoa_encabezado (contenido) VALUES (?)', [contenido || '']);
+            await db.execute('INSERT INTO smoa_encabezado (contenido, imagen) VALUES (?, ?)', [contenido || '', finalImagen]);
         } else {
-            await db.execute('UPDATE smoa_encabezado SET contenido = ? WHERE id = ?', [contenido || '', rows[0].id]);
+            await db.execute('UPDATE smoa_encabezado SET contenido = ?, imagen = ? WHERE id = ?', [contenido || '', finalImagen, rows[0].id]);
+        }
+        if (oldImagen && oldImagen !== finalImagen) {
+            const oldPath = path.join(smoaEditorImgDir, oldImagen);
+            if (fs.existsSync(oldPath)) { fs.unlinkSync(oldPath); }
         }
         const [updated] = await db.execute('SELECT * FROM smoa_encabezado LIMIT 1');
         res.json({ success: true, data: updated[0], message: 'Encabezado SMOA guardado' });
