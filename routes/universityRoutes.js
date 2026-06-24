@@ -2233,6 +2233,57 @@ router.get('/smoa-uploads/:filename', (req, res) => {
     }
 });
 
+// ========== PERMISOS DE PRESENTACIONES SMOA ==========
+
+router.get('/smoa-permisos-pptx', async (req, res) => {
+    try {
+        const [permisos] = await db.execute('SELECT * FROM smoa_permisos_pptx');
+        const agrupados = {};
+        for (const p of permisos) {
+            if (!agrupados[p.fila_id]) agrupados[p.fila_id] = [];
+            agrupados[p.fila_id].push(p);
+        }
+        res.json({ success: true, data: agrupados });
+    } catch (error) {
+        console.error('Error al obtener permisos pptx:', error);
+        res.status(500).json({ success: false, error: 'Error al obtener permisos' });
+    }
+});
+
+router.get('/smoa-filas/:id/permisos-pptx', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const [permisos] = await db.execute(
+            'SELECT sp.*, CASE WHEN sp.usuario_tipo = \'directivo\' THEN d.nombre_completo WHEN sp.usuario_tipo = \'personal\' THEN p.nombre_completo END as nombre FROM smoa_permisos_pptx sp LEFT JOIN directivos d ON sp.usuario_id = d.id AND sp.usuario_tipo = \'directivo\' LEFT JOIN personal p ON sp.usuario_id = p.id AND sp.usuario_tipo = \'personal\' WHERE sp.fila_id = ? ORDER BY nombre',
+            [id]
+        );
+        res.json({ success: true, data: permisos });
+    } catch (error) {
+        console.error('Error al obtener permisos pptx de fila:', error);
+        res.status(500).json({ success: false, error: 'Error al obtener permisos' });
+    }
+});
+
+router.put('/smoa-filas/:id/permisos-pptx', async (req, res) => {
+    const { id } = req.params;
+    const { permisos } = req.body;
+    try {
+        await db.execute('DELETE FROM smoa_permisos_pptx WHERE fila_id = ?', [id]);
+        if (permisos && Array.isArray(permisos) && permisos.length > 0) {
+            for (const p of permisos) {
+                await db.execute(
+                    'INSERT INTO smoa_permisos_pptx (fila_id, usuario_id, usuario_tipo, puede_subir, puede_cambiar, puede_eliminar) VALUES (?, ?, ?, ?, ?, ?)',
+                    [id, p.usuario_id, p.usuario_tipo, p.puede_subir ? 1 : 0, p.puede_cambiar ? 1 : 0, p.puede_eliminar ? 1 : 0]
+                );
+            }
+        }
+        res.json({ success: true, message: 'Permisos actualizados' });
+    } catch (error) {
+        console.error('Error al actualizar permisos pptx:', error);
+        res.status(500).json({ success: false, error: 'Error al actualizar permisos' });
+    }
+});
+
 // ========== SUBIDA DE IMÁGENES PARA EL EDITOR SMOA ==========
 
 const smoaEditorImgDir = 'uploads/smoa-editor';
