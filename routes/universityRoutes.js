@@ -196,6 +196,99 @@ router.get('/superusers', async (req, res) => {
     }
 });
 
+// ========== RUTAS PÚBLICAS DE SERVIDO DE ARCHIVOS (sin auth) ==========
+
+const smoaEditorImgDir = 'uploads/smoa-editor';
+if (!fs.existsSync(smoaEditorImgDir)) { fs.mkdirSync(smoaEditorImgDir, { recursive: true }); }
+
+router.get('/smoa-uploads/:filename', (req, res) => {
+    try {
+        const { filename } = req.params;
+        const filePath = path.join(smoaDir, filename);
+        if (fs.existsSync(filePath)) {
+            res.download(filePath, filename);
+        } else {
+            res.status(404).json({ error: 'Archivo no encontrado' });
+        }
+    } catch (error) {
+        console.error('Error al servir archivo SMOA:', error);
+        res.status(500).json({ error: 'Error al cargar el archivo' });
+    }
+});
+
+router.get('/smoa-editor-images/:filename', (req, res) => {
+    try {
+        const { filename } = req.params;
+        const filePath = path.resolve(__dirname, '..', smoaEditorImgDir, filename);
+        if (fs.existsSync(filePath)) {
+            res.sendFile(filePath);
+        } else {
+            res.status(404).json({ error: 'Imagen no encontrada' });
+        }
+    } catch (error) {
+        console.error('Error al servir imagen:', error);
+        res.status(500).json({ error: 'Error al cargar la imagen' });
+    }
+});
+
+router.get('/personal/foto/:filename', (req, res) => {
+    try {
+        const { filename } = req.params;
+        const filePath = path.join('uploads/personal', filename);
+        if (fs.existsSync(filePath)) {
+            res.sendFile(path.resolve(filePath));
+        } else {
+            const defaultAvatar = path.join(__dirname, '../public/default-avatar.png');
+            if (fs.existsSync(defaultAvatar)) {
+                res.sendFile(defaultAvatar);
+            } else {
+                res.status(404).json({ error: 'Foto no encontrada' });
+            }
+        }
+    } catch (error) {
+        console.error('Error al servir foto:', error);
+        res.status(500).json({ error: 'Error al cargar la foto' });
+    }
+});
+
+router.get('/personal/debug-fotos', async (req, res) => {
+    try {
+        const dir = 'uploads/personal';
+        if (!fs.existsSync(dir)) {
+            return res.json({ success: false, message: 'Directorio uploads/personal no existe' });
+        }
+        const files = fs.readdirSync(dir);
+        res.json({ success: true, archivos: files, ruta: path.resolve(dir) });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+router.get('/debug/uploads', (req, res) => {
+    const uploadsPath = path.join(__dirname, '../uploads');
+    if (!fs.existsSync(uploadsPath)) {
+        return res.json({ exists: false, path: uploadsPath });
+    }
+    const items = fs.readdirSync(uploadsPath).map(item => {
+        const itemPath = path.join(uploadsPath, item);
+        const stat = fs.statSync(itemPath);
+        return { nombre: item, esDirectorio: stat.isDirectory(), tamaño: stat.size };
+    });
+    res.json({ exists: true, path: path.resolve(uploadsPath), contenido: items });
+});
+
+router.get('/tareas/archivo/:filename', (req, res) => {
+    try {
+        const { filename } = req.params;
+        const filePath = path.join('uploads/tareas', filename);
+        if (fs.existsSync(filePath)) { res.sendFile(path.resolve(filePath)); }
+        else { res.status(404).json({ error: 'Archivo no encontrado' }); }
+    } catch (error) {
+        console.error('Error al servir archivo:', error);
+        res.status(500).json({ error: 'Error al cargar el archivo' });
+    }
+});
+
 router.use(verifyToken);
 
 router.get('/estadisticas', async (req, res) => {
@@ -307,26 +400,6 @@ router.get('/personal', async (req, res) => {
     }
 });
 
-router.get('/personal/debug-fotos', async (req, res) => {
-    try {
-        const [personal] = await db.execute('SELECT id, nombre_completo, foto_perfil FROM personal ORDER BY id');
-        const resultados = [];
-        for (const persona of personal) {
-            let existeArchivo = false;
-            let rutaArchivo = '';
-            if (persona.foto_perfil) {
-                rutaArchivo = path.join('uploads/personal', persona.foto_perfil);
-                existeArchivo = fs.existsSync(rutaArchivo);
-            }
-            resultados.push({ id: persona.id, nombre: persona.nombre_completo, foto_perfil: persona.foto_perfil, existe_archivo: existeArchivo, ruta: rutaArchivo, url: persona.foto_perfil ? `http://strideutmat.com:5000/api/university/personal/foto/${persona.foto_perfil}` : 'Sin foto' });
-        }
-        res.json({ success: true, data: resultados, carpeta: path.resolve('uploads/personal'), archivos_en_carpeta: fs.existsSync('uploads/personal') ? fs.readdirSync('uploads/personal') : 'Carpeta no existe' });
-    } catch (error) {
-        console.error('Error en debug:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
 router.get('/personal/:id', async (req, res) => {
     try {
         const { id } = req.params;
@@ -343,26 +416,6 @@ router.get('/personal/:id', async (req, res) => {
     } catch (error) {
         console.error('Error al obtener personal:', error);
         res.status(500).json({ success: false, error: 'Error al obtener personal' });
-    }
-});
-
-router.get('/personal/foto/:filename', (req, res) => {
-    try {
-        const { filename } = req.params;
-        const filePath = path.join('uploads/personal', filename);
-        if (fs.existsSync(filePath)) {
-            res.sendFile(path.resolve(filePath));
-        } else {
-            const defaultAvatar = path.join(__dirname, '../public/default-avatar.png');
-            if (fs.existsSync(defaultAvatar)) {
-                res.sendFile(defaultAvatar);
-            } else {
-                res.status(404).json({ error: 'Foto no encontrada' });
-            }
-        }
-    } catch (error) {
-        console.error('Error al servir foto:', error);
-        res.status(500).json({ error: 'Error al cargar la foto' });
     }
 });
 
@@ -626,25 +679,6 @@ router.get('/actividades/direccion/:direccion_id', async (req, res) => {
     } catch (error) {
         console.error('Error al obtener actividades:', error);
         res.status(500).json({ success: false, error: 'Error al obtener actividades' });
-    }
-});
-
-router.get('/debug/uploads', (req, res) => {
-    try {
-        const uploadDir = 'uploads/actividades';
-        if (!fs.existsSync(uploadDir)) {
-            return res.json({ success: false, message: 'Directorio no existe', path: path.resolve(uploadDir) });
-        }
-        const files = fs.readdirSync(uploadDir);
-        const fileDetails = files.map(file => {
-            const filePath = path.join(uploadDir, file);
-            const stats = fs.statSync(filePath);
-            return { nombre: file, ruta: filePath, tamaño: stats.size, url: `http://strideutmat.com:5000/uploads/actividades/${file}`, existe: fs.existsSync(filePath) };
-        });
-        res.json({ success: true, uploadDir: path.resolve(uploadDir), totalArchivos: files.length, archivos: fileDetails });
-    } catch (error) {
-        console.error('Error al leer directorio:', error);
-        res.status(500).json({ success: false, error: error.message });
     }
 });
 
@@ -1165,18 +1199,6 @@ router.get('/tareas/usuarios-disponibles', async (req, res) => {
     } catch (error) {
         console.error('❌ Error al obtener personal:', error);
         res.status(500).json({ success: false, error: 'Error al obtener personal' });
-    }
-});
-
-router.get('/tareas/archivo/:filename', (req, res) => {
-    try {
-        const { filename } = req.params;
-        const filePath = path.join('uploads/tareas', filename);
-        if (fs.existsSync(filePath)) { res.sendFile(path.resolve(filePath)); }
-        else { res.status(404).json({ error: 'Archivo no encontrado' }); }
-    } catch (error) {
-        console.error('Error al servir archivo:', error);
-        res.status(500).json({ error: 'Error al cargar el archivo' });
     }
 });
 
@@ -2223,21 +2245,6 @@ router.post('/smoa-upload', uploadSmoa.single('archivo'), async (req, res) => {
     }
 });
 
-router.get('/smoa-uploads/:filename', (req, res) => {
-    try {
-        const { filename } = req.params;
-        const filePath = path.join(smoaDir, filename);
-        if (fs.existsSync(filePath)) {
-            res.download(filePath, filename);
-        } else {
-            res.status(404).json({ error: 'Archivo no encontrado' });
-        }
-    } catch (error) {
-        console.error('Error al servir archivo SMOA:', error);
-        res.status(500).json({ error: 'Error al cargar el archivo' });
-    }
-});
-
 // ========== PERMISOS DE PRESENTACIONES SMOA ==========
 
 router.get('/smoa-permisos-pptx', async (req, res) => {
@@ -2291,9 +2298,6 @@ router.put('/smoa-filas/:id/permisos-pptx', async (req, res) => {
 
 // ========== SUBIDA DE IMÁGENES PARA EL EDITOR SMOA ==========
 
-const smoaEditorImgDir = 'uploads/smoa-editor';
-if (!fs.existsSync(smoaEditorImgDir)) { fs.mkdirSync(smoaEditorImgDir, { recursive: true }); }
-
 const smoaEditorStorage = multer.diskStorage({
     destination: function (req, file, cb) { cb(null, smoaEditorImgDir); },
     filename: function (req, file, cb) {
@@ -2327,21 +2331,6 @@ router.post('/smoa-upload-image', uploadSmoaEditorImg.single('imagen'), async (r
     } catch (error) {
         console.error('Error al subir imagen:', error);
         res.status(500).json({ success: false, error: error.message || 'Error al subir imagen' });
-    }
-});
-
-router.get('/smoa-editor-images/:filename', (req, res) => {
-    try {
-        const { filename } = req.params;
-        const filePath = path.resolve(__dirname, '..', smoaEditorImgDir, filename);
-        if (fs.existsSync(filePath)) {
-            res.sendFile(filePath);
-        } else {
-            res.status(404).json({ error: 'Imagen no encontrada' });
-        }
-    } catch (error) {
-        console.error('Error al servir imagen:', error);
-        res.status(500).json({ error: 'Error al cargar la imagen' });
     }
 });
 
