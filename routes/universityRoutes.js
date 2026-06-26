@@ -201,22 +201,32 @@ router.get('/superusers', async (req, res) => {
 const smoaEditorImgDir = 'uploads/smoa-editor';
 if (!fs.existsSync(smoaEditorImgDir)) { fs.mkdirSync(smoaEditorImgDir, { recursive: true }); }
 
-router.get('/smoa-uploads/*', (req, res) => {
+router.get('/smoa-uploads/:filename', (req, res) => {
     try {
-        const filepath = req.params[0];
-        // Try pptx dir first, then column dir (with "col/" prefix stripped)
-        const possiblePaths = [
-            path.join(smoaDir, filepath),
-            path.join(smoaColDir, filepath.replace(/^col[\\/]/, ''))
-        ];
-        for (const fp of possiblePaths) {
-            if (fs.existsSync(fp)) {
-                return res.download(fp, path.basename(fp));
-            }
+        const { filename } = req.params;
+        const filePath = path.join(smoaDir, filename);
+        if (fs.existsSync(filePath)) {
+            res.download(filePath, filename);
+        } else {
+            res.status(404).json({ error: 'Archivo no encontrado' });
         }
-        res.status(404).json({ error: 'Archivo no encontrado' });
     } catch (error) {
         console.error('Error al servir archivo SMOA:', error);
+        res.status(500).json({ error: 'Error al cargar el archivo' });
+    }
+});
+
+router.get('/smoa-uploads/col/:filename', (req, res) => {
+    try {
+        const { filename } = req.params;
+        const filePath = path.join(smoaColDir, filename);
+        if (fs.existsSync(filePath)) {
+            res.download(filePath, filename);
+        } else {
+            res.status(404).json({ error: 'Archivo no encontrado' });
+        }
+    } catch (error) {
+        console.error('Error al servir archivo columna SMOA:', error);
         res.status(500).json({ error: 'Error al cargar el archivo' });
     }
 });
