@@ -36,6 +36,14 @@ async function runMigrations() {
         await db.execute('ALTER TABLE matriz_encabezado ADD COLUMN bloqueo_filas TINYINT(1) DEFAULT 0');
         console.log('✅ Columna bloqueo_filas agregada a matriz_encabezado');
     } catch (_) {}
+    try {
+        await db.execute("ALTER TABLE smoa_columnas ADD COLUMN tipo_dato VARCHAR(20) DEFAULT 'texto' AFTER activa");
+        console.log('✅ Columna tipo_dato agregada a smoa_columnas');
+    } catch (_) {}
+    try {
+        await db.execute("ALTER TABLE smoa_columnas ADD COLUMN permiso_subida VARCHAR(20) DEFAULT 'todos' AFTER tipo_dato");
+        console.log('✅ Columna permiso_subida agregada a smoa_columnas');
+    } catch (_) {}
 
 }
 

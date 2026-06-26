@@ -201,15 +201,20 @@ router.get('/superusers', async (req, res) => {
 const smoaEditorImgDir = 'uploads/smoa-editor';
 if (!fs.existsSync(smoaEditorImgDir)) { fs.mkdirSync(smoaEditorImgDir, { recursive: true }); }
 
-router.get('/smoa-uploads/:filename', (req, res) => {
+router.get('/smoa-uploads/*', (req, res) => {
     try {
-        const { filename } = req.params;
-        const filePath = path.join(smoaDir, filename);
-        if (fs.existsSync(filePath)) {
-            res.download(filePath, filename);
-        } else {
-            res.status(404).json({ error: 'Archivo no encontrado' });
+        const filepath = req.params[0];
+        // Try pptx dir first, then column dir (with "col/" prefix stripped)
+        const possiblePaths = [
+            path.join(smoaDir, filepath),
+            path.join(smoaColDir, filepath.replace(/^col[\\/]/, ''))
+        ];
+        for (const fp of possiblePaths) {
+            if (fs.existsSync(fp)) {
+                return res.download(fp, path.basename(fp));
+            }
         }
+        res.status(404).json({ error: 'Archivo no encontrado' });
     } catch (error) {
         console.error('Error al servir archivo SMOA:', error);
         res.status(500).json({ error: 'Error al cargar el archivo' });
@@ -1967,6 +1972,24 @@ const uploadSmoa = multer({
     limits: { fileSize: 50 * 1024 * 1024 }
 });
 
+// Multer config for column file uploads (documento type columns - accepts any file)
+const smoaColDir = 'uploads/smoa/columnas';
+if (!fs.existsSync(smoaColDir)) { fs.mkdirSync(smoaColDir, { recursive: true }); }
+
+const smoaColStorage = multer.diskStorage({
+    destination: function (req, file, cb) { cb(null, smoaColDir); },
+    filename: function (req, file, cb) {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        const ext = path.extname(file.originalname).toLowerCase();
+        cb(null, 'col-' + uniqueSuffix + ext);
+    }
+});
+
+const uploadSmoaCol = multer({
+    storage: smoaColStorage,
+    limits: { fileSize: 50 * 1024 * 1024 }
+});
+
 // ========== SMOA - SEGUIMIENTO MENSUAL DE OBJETIVOS ANUALES ==========
 
 router.get('/smoa-encabezado', async (req, res) => {
@@ -2088,11 +2111,13 @@ router.get('/smoa-columnas', async (req, res) => {
 
 router.post('/smoa-columnas', async (req, res) => {
     try {
-        const { nombre } = req.body;
+        const { nombre, tipo_dato, permiso_subida } = req.body;
         if (!nombre || !nombre.trim()) {
             return res.status(400).json({ success: false, error: 'El nombre es requerido' });
         }
-        const [result] = await db.execute('INSERT INTO smoa_columnas (nombre) VALUES (?)', [nombre.trim()]);
+        const tipo = ['texto', 'documento', 'enlace'].includes(tipo_dato) ? tipo_dato : 'texto';
+        const permiso = ['solo_admin', 'todos'].includes(permiso_subida) ? permiso_subida : 'todos';
+        const [result] = await db.execute('INSERT INTO smoa_columnas (nombre, tipo_dato, permiso_subida) VALUES (?, ?, ?)', [nombre.trim(), tipo, permiso]);
         res.status(201).json({ success: true, message: 'Columna SMOA creada', columnaId: result.insertId });
     } catch (error) {
         console.error('Error al crear columna SMOA:', error);
@@ -2103,11 +2128,13 @@ router.post('/smoa-columnas', async (req, res) => {
 router.put('/smoa-columnas/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { nombre } = req.body;
+        const { nombre, tipo_dato, permiso_subida } = req.body;
         if (!nombre || !nombre.trim()) {
             return res.status(400).json({ success: false, error: 'El nombre es requerido' });
         }
-        const [result] = await db.execute('UPDATE smoa_columnas SET nombre = ? WHERE id = ?', [nombre.trim(), id]);
+        const tipo = ['texto', 'documento', 'enlace'].includes(tipo_dato) ? tipo_dato : 'texto';
+        const permiso = ['solo_admin', 'todos'].includes(permiso_subida) ? permiso_subida : 'todos';
+        const [result] = await db.execute('UPDATE smoa_columnas SET nombre = ?, tipo_dato = ?, permiso_subida = ? WHERE id = ?', [nombre.trim(), tipo, permiso, id]);
         if (result.affectedRows === 0) {
             return res.status(404).json({ success: false, error: 'Columna no encontrada' });
         }
@@ -2236,6 +2263,74 @@ router.put('/smoa-filas/:id/pptx', (req, res, next) => {
     } catch (error) {
         console.error('Error al actualizar presentación SMOA:', error);
         res.status(500).json({ success: false, error: 'Error al actualizar presentación' });
+    }
+});
+
+// Upload file to a documento-type column cell
+router.post('/smoa-filas/:filaId/columna/:columnaId/subir', uploadSmoaCol.single('archivo'), async (req, res) => {
+    try {
+        const { filaId, columnaId } = req.params;
+        const usuarioId = req.body.usuario_id;
+        const usuarioTipo = req.body.usuario_tipo;
+
+        if (!req.file) {
+            return res.status(400).json({ success: false, error: 'No se recibió ningún archivo' });
+        }
+
+        const [filas] = await db.execute('SELECT * FROM smoa_filas WHERE id = ?', [filaId]);
+        if (filas.length === 0) {
+            return res.status(404).json({ success: false, error: 'Fila no encontrada' });
+        }
+
+        const fila = filas[0];
+        let valores;
+        try {
+            valores = typeof fila.valores === 'string' ? JSON.parse(fila.valores) : (fila.valores || {});
+        } catch {
+            valores = {};
+        }
+
+        const key = `d_${columnaId}`;
+        valores[key] = req.file.filename;
+        valores[`${key}_uploaded_by`] = `${usuarioId}_${usuarioTipo}`;
+
+        await db.execute('UPDATE smoa_filas SET valores = ? WHERE id = ?', [JSON.stringify(valores), filaId]);
+        const [updated] = await db.execute('SELECT * FROM smoa_filas WHERE id = ?', [filaId]);
+        res.json({ success: true, data: updated[0], filename: req.file.filename, message: 'Archivo subido exitosamente' });
+    } catch (error) {
+        console.error('Error al subir archivo a columna:', error);
+        res.status(500).json({ success: false, error: error.message || 'Error al subir archivo' });
+    }
+});
+
+// Delete file from a documento-type column cell
+router.delete('/smoa-filas/:filaId/columna/:columnaId/eliminar', async (req, res) => {
+    try {
+        const { filaId, columnaId } = req.params;
+
+        const [filas] = await db.execute('SELECT * FROM smoa_filas WHERE id = ?', [filaId]);
+        if (filas.length === 0) {
+            return res.status(404).json({ success: false, error: 'Fila no encontrada' });
+        }
+
+        const fila = filas[0];
+        let valores;
+        try {
+            valores = typeof fila.valores === 'string' ? JSON.parse(fila.valores) : (fila.valores || {});
+        } catch {
+            valores = {};
+        }
+
+        const key = `d_${columnaId}`;
+        delete valores[key];
+        delete valores[`${key}_uploaded_by`];
+
+        await db.execute('UPDATE smoa_filas SET valores = ? WHERE id = ?', [JSON.stringify(valores), filaId]);
+        const [updated] = await db.execute('SELECT * FROM smoa_filas WHERE id = ?', [filaId]);
+        res.json({ success: true, data: updated[0], message: 'Archivo eliminado' });
+    } catch (error) {
+        console.error('Error al eliminar archivo de columna:', error);
+        res.status(500).json({ success: false, error: error.message || 'Error al eliminar archivo' });
     }
 });
 
