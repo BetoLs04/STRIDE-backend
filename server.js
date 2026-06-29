@@ -48,6 +48,10 @@ async function runMigrations() {
         await db.execute("ALTER TABLE smoa_encabezado ADD COLUMN imagen_ancho INT DEFAULT NULL");
         console.log('✅ Columna imagen_ancho agregada a smoa_encabezado');
     } catch (_) {}
+    try {
+        await db.execute("ALTER TABLE smoa_encabezado ADD COLUMN imagen_alineacion VARCHAR(20) DEFAULT 'center'");
+        console.log('✅ Columna imagen_alineacion agregada a smoa_encabezado');
+    } catch (_) {}
 
 }
 
