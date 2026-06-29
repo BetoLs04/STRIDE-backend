@@ -2447,4 +2447,166 @@ router.post('/smoa-upload-image', uploadSmoaEditorImg.single('imagen'), async (r
     }
 });
 
+// ========== SEPLADE ENDPOINTS ==========
+
+// GET /seplade-hojas - List all sheets
+router.get('/seplade-hojas', async (req, res) => {
+    try {
+        const [rows] = await db.execute('SELECT * FROM seplade_hojas ORDER BY created_at DESC');
+        res.json({ success: true, data: rows });
+    } catch (error) {
+        console.error('Error al obtener hojas SEPLADE:', error);
+        res.status(500).json({ success: false, error: 'Error al obtener hojas' });
+    }
+});
+
+// POST /seplade-hojas - Create a new sheet
+router.post('/seplade-hojas', async (req, res) => {
+    try {
+        const { titulo, subtitulo } = req.body;
+        const [result] = await db.execute(
+            'INSERT INTO seplade_hojas (titulo, subtitulo) VALUES (?, ?)',
+            [titulo || '', subtitulo || '']
+        );
+        const [rows] = await db.execute('SELECT * FROM seplade_hojas WHERE id = ?', [result.insertId]);
+        res.json({ success: true, data: rows[0] });
+    } catch (error) {
+        console.error('Error al crear hoja SEPLADE:', error);
+        res.status(500).json({ success: false, error: 'Error al crear hoja' });
+    }
+});
+
+// PUT /seplade-hojas/:id - Update a sheet (title, subtitle)
+router.put('/seplade-hojas/:id', async (req, res) => {
+    try {
+        const { titulo, subtitulo } = req.body;
+        await db.execute(
+            'UPDATE seplade_hojas SET titulo = ?, subtitulo = ? WHERE id = ?',
+            [titulo ?? '', subtitulo ?? '', req.params.id]
+        );
+        const [rows] = await db.execute('SELECT * FROM seplade_hojas WHERE id = ?', [req.params.id]);
+        res.json({ success: true, data: rows[0] });
+    } catch (error) {
+        console.error('Error al actualizar hoja SEPLADE:', error);
+        res.status(500).json({ success: false, error: 'Error al actualizar hoja' });
+    }
+});
+
+// DELETE /seplade-hojas/:id - Delete a sheet (cascades to indicadores and valores)
+router.delete('/seplade-hojas/:id', async (req, res) => {
+    try {
+        await db.execute('DELETE FROM seplade_hojas WHERE id = ?', [req.params.id]);
+        res.json({ success: true, message: 'Hoja eliminada' });
+    } catch (error) {
+        console.error('Error al eliminar hoja SEPLADE:', error);
+        res.status(500).json({ success: false, error: 'Error al eliminar hoja' });
+    }
+});
+
+// GET /seplade-hojas/:id - Get a sheet with all its indicadores and valores
+router.get('/seplade-hojas/:id', async (req, res) => {
+    try {
+        const [hojaRows] = await db.execute('SELECT * FROM seplade_hojas WHERE id = ?', [req.params.id]);
+        if (hojaRows.length === 0) {
+            return res.status(404).json({ success: false, error: 'Hoja no encontrada' });
+        }
+        const [indicadores] = await db.execute(
+            'SELECT * FROM seplade_indicadores WHERE hoja_id = ? ORDER BY orden ASC, id ASC',
+            [req.params.id]
+        );
+        const indicadorIds = indicadores.map(i => i.id);
+        let valores = [];
+        if (indicadorIds.length > 0) {
+            const placeholders = indicadorIds.map(() => '?').join(',');
+            const [rows] = await db.execute(
+                `SELECT * FROM seplade_valores WHERE indicador_id IN (${placeholders}) ORDER BY indicador_id, mes, tipo`,
+                indicadorIds
+            );
+            valores = rows;
+        }
+        res.json({ success: true, data: { ...hojaRows[0], indicadores, valores } });
+    } catch (error) {
+        console.error('Error al obtener hoja SEPLADE:', error);
+        res.status(500).json({ success: false, error: 'Error al obtener hoja' });
+    }
+});
+
+// POST /seplade-indicadores - Create a new indicator in a sheet
+router.post('/seplade-indicadores', async (req, res) => {
+    try {
+        const { hoja_id } = req.body;
+        if (!hoja_id) {
+            return res.status(400).json({ success: false, error: 'hoja_id es requerido' });
+        }
+        const [result] = await db.execute(
+            'INSERT INTO seplade_indicadores (hoja_id, nombre) VALUES (?, ?)',
+            [hoja_id, 'Nuevo indicador']
+        );
+        // Create empty values for all 12 months (programado + realizado)
+        const values = [];
+        for (let mes = 1; mes <= 12; mes++) {
+            values.push([result.insertId, mes, 'programado', '']);
+            values.push([result.insertId, mes, 'realizado', '']);
+        }
+        const placeholders = values.map(() => '(?, ?, ?, ?)').join(',');
+        const flatValues = values.flat();
+        await db.execute(
+            `INSERT INTO seplade_valores (indicador_id, mes, tipo, valor) VALUES ${placeholders}`,
+            flatValues
+        );
+        const [rows] = await db.execute('SELECT * FROM seplade_indicadores WHERE id = ?', [result.insertId]);
+        res.json({ success: true, data: rows[0] });
+    } catch (error) {
+        console.error('Error al crear indicador SEPLADE:', error);
+        res.status(500).json({ success: false, error: 'Error al crear indicador' });
+    }
+});
+
+// PUT /seplade-indicadores/:id - Update an indicator's metadata
+router.put('/seplade-indicadores/:id', async (req, res) => {
+    try {
+        const { nombre, nivel, unidad_medida, meta_anual, encargado, evidencia_fisica, evidencia_online } = req.body;
+        await db.execute(
+            `UPDATE seplade_indicadores SET nombre = ?, nivel = ?, unidad_medida = ?, meta_anual = ?,
+             encargado = ?, evidencia_fisica = ?, evidencia_online = ? WHERE id = ?`,
+            [nombre ?? '', nivel ?? '', unidad_medida ?? '', meta_anual ?? '',
+             encargado ?? '', evidencia_fisica ?? '', evidencia_online ?? '', req.params.id]
+        );
+        const [rows] = await db.execute('SELECT * FROM seplade_indicadores WHERE id = ?', [req.params.id]);
+        res.json({ success: true, data: rows[0] });
+    } catch (error) {
+        console.error('Error al actualizar indicador SEPLADE:', error);
+        res.status(500).json({ success: false, error: 'Error al actualizar indicador' });
+    }
+});
+
+// DELETE /seplade-indicadores/:id - Delete an indicator (cascades to valores)
+router.delete('/seplade-indicadores/:id', async (req, res) => {
+    try {
+        await db.execute('DELETE FROM seplade_indicadores WHERE id = ?', [req.params.id]);
+        res.json({ success: true, message: 'Indicador eliminado' });
+    } catch (error) {
+        console.error('Error al eliminar indicador SEPLADE:', error);
+        res.status(500).json({ success: false, error: 'Error al eliminar indicador' });
+    }
+});
+
+// PUT /seplade-valores/:indicador_id - Update monthly values for an indicator
+router.put('/seplade-valores/:indicador_id', async (req, res) => {
+    try {
+        const { mes, tipo, valor } = req.body;
+        if (!mes || !tipo) {
+            return res.status(400).json({ success: false, error: 'mes y tipo son requeridos' });
+        }
+        await db.execute(
+            'UPDATE seplade_valores SET valor = ? WHERE indicador_id = ? AND mes = ? AND tipo = ?',
+            [valor ?? '', req.params.indicador_id, mes, tipo]
+        );
+        res.json({ success: true, message: 'Valor actualizado' });
+    } catch (error) {
+        console.error('Error al actualizar valor SEPLADE:', error);
+        res.status(500).json({ success: false, error: 'Error al actualizar valor' });
+    }
+});
+
 module.exports = router;
