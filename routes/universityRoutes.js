@@ -2516,15 +2516,21 @@ router.get('/seplade-hojas/:id', async (req, res) => {
         );
         const indicadorIds = indicadores.map(i => i.id);
         let valores = [];
+        let notas = [];
         if (indicadorIds.length > 0) {
             const placeholders = indicadorIds.map(() => '?').join(',');
-            const [rows] = await db.execute(
+            const [vRows] = await db.execute(
                 `SELECT * FROM seplade_valores WHERE indicador_id IN (${placeholders}) ORDER BY indicador_id, mes, tipo`,
                 indicadorIds
             );
-            valores = rows;
+            valores = vRows;
+            const [nRows] = await db.execute(
+                `SELECT * FROM seplade_notas WHERE indicador_id IN (${placeholders}) ORDER BY indicador_id, mes`,
+                indicadorIds
+            );
+            notas = nRows;
         }
-        res.json({ success: true, data: { ...hojaRows[0], indicadores, valores } });
+        res.json({ success: true, data: { ...hojaRows[0], indicadores, valores, notas } });
     } catch (error) {
         console.error('Error al obtener hoja SEPLADE:', error);
         res.status(500).json({ success: false, error: 'Error al obtener hoja' });
@@ -2591,12 +2597,47 @@ router.delete('/seplade-indicadores/:id', async (req, res) => {
     }
 });
 
+// GET /seplade-notas/:indicador_id/:mes - Get note for a realized cell
+router.get('/seplade-notas/:indicador_id/:mes', async (req, res) => {
+    try {
+        const [rows] = await db.execute(
+            'SELECT * FROM seplade_notas WHERE indicador_id = ? AND mes = ?',
+            [req.params.indicador_id, req.params.mes]
+        );
+        res.json({ success: true, data: rows[0] || { indicador_id: parseInt(req.params.indicador_id), mes: parseInt(req.params.mes), nota: '' } });
+    } catch (error) {
+        console.error('Error al obtener nota SEPLADE:', error);
+        res.status(500).json({ success: false, error: 'Error al obtener nota' });
+    }
+});
+
+// PUT /seplade-notas/:indicador_id/:mes - Upsert note for a realized cell
+router.put('/seplade-notas/:indicador_id/:mes', async (req, res) => {
+    try {
+        const { nota } = req.body;
+        await db.execute(
+            `INSERT INTO seplade_notas (indicador_id, mes, nota) VALUES (?, ?, ?)
+             ON DUPLICATE KEY UPDATE nota = VALUES(nota)`,
+            [req.params.indicador_id, req.params.mes, nota ?? '']
+        );
+        res.json({ success: true, message: 'Nota guardada' });
+    } catch (error) {
+        console.error('Error al guardar nota SEPLADE:', error);
+        res.status(500).json({ success: false, error: 'Error al guardar nota' });
+    }
+});
+
 // PUT /seplade-valores/:indicador_id - Update monthly values for an indicator
 router.put('/seplade-valores/:indicador_id', async (req, res) => {
     try {
         const { mes, tipo, valor } = req.body;
         if (!mes || !tipo) {
             return res.status(400).json({ success: false, error: 'mes y tipo son requeridos' });
+        }
+        if (tipo === 'programado' || tipo === 'realizado') {
+            if (valor !== '' && !/^\d+$/.test(valor)) {
+                return res.status(400).json({ success: false, error: 'El valor debe ser numérico' });
+            }
         }
         await db.execute(
             'UPDATE seplade_valores SET valor = ? WHERE indicador_id = ? AND mes = ? AND tipo = ?',
