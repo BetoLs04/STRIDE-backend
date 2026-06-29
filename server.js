@@ -44,6 +44,10 @@ async function runMigrations() {
         await db.execute("ALTER TABLE smoa_columnas ADD COLUMN permiso_subida VARCHAR(20) DEFAULT 'todos' AFTER tipo_dato");
         console.log('✅ Columna permiso_subida agregada a smoa_columnas');
     } catch (_) {}
+    try {
+        await db.execute("ALTER TABLE smoa_encabezado ADD COLUMN imagen_ancho INT DEFAULT NULL");
+        console.log('✅ Columna imagen_ancho agregada a smoa_encabezado');
+    } catch (_) {}
 
 }
 

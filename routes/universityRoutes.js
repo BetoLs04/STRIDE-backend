@@ -2019,14 +2019,15 @@ router.get('/smoa-encabezado', async (req, res) => {
 
 router.put('/smoa-encabezado', async (req, res) => {
     try {
-        const { contenido, imagen } = req.body;
+        const { contenido, imagen, imagen_ancho } = req.body;
         let [rows] = await db.execute('SELECT * FROM smoa_encabezado LIMIT 1');
         const oldImagen = rows[0]?.imagen;
         const finalImagen = imagen === undefined ? oldImagen : (imagen || null);
+        const finalAncho = imagen_ancho !== undefined ? (imagen_ancho || null) : (rows[0]?.imagen_ancho || null);
         if (rows.length === 0) {
-            await db.execute('INSERT INTO smoa_encabezado (contenido, imagen) VALUES (?, ?)', [contenido || '', finalImagen]);
+            await db.execute('INSERT INTO smoa_encabezado (contenido, imagen, imagen_ancho) VALUES (?, ?, ?)', [contenido || '', finalImagen, finalAncho]);
         } else {
-            await db.execute('UPDATE smoa_encabezado SET contenido = ?, imagen = ? WHERE id = ?', [contenido || '', finalImagen, rows[0].id]);
+            await db.execute('UPDATE smoa_encabezado SET contenido = ?, imagen = ?, imagen_ancho = ? WHERE id = ?', [contenido || '', finalImagen, finalAncho, rows[0].id]);
         }
         if (oldImagen && oldImagen !== finalImagen) {
             const oldPath = path.join(smoaEditorImgDir, oldImagen);
