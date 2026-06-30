@@ -2503,7 +2503,7 @@ router.delete('/seplade-hojas/:id', async (req, res) => {
     }
 });
 
-// GET /seplade-hojas/:id - Get a sheet with all its indicadores and valores
+// GET /seplade-hojas/:id - Get a sheet with all its indicadores, valores, notas and assigned users
 router.get('/seplade-hojas/:id', async (req, res) => {
     try {
         const [hojaRows] = await db.execute('SELECT * FROM seplade_hojas WHERE id = ?', [req.params.id]);
@@ -2517,6 +2517,7 @@ router.get('/seplade-hojas/:id', async (req, res) => {
         const indicadorIds = indicadores.map(i => i.id);
         let valores = [];
         let notas = [];
+        let usuariosAsignados = [];
         if (indicadorIds.length > 0) {
             const placeholders = indicadorIds.map(() => '?').join(',');
             const [vRows] = await db.execute(
@@ -2529,8 +2530,21 @@ router.get('/seplade-hojas/:id', async (req, res) => {
                 indicadorIds
             );
             notas = nRows;
+            const [uRows] = await db.execute(
+                `SELECT siu.*,
+                        CASE WHEN siu.usuario_tipo = 'directivo' THEN d.nombre_completo
+                             WHEN siu.usuario_tipo = 'personal' THEN p.nombre_completo
+                        END as nombre
+                 FROM seplade_indicador_usuarios siu
+                 LEFT JOIN directivos d ON siu.usuario_id = d.id AND siu.usuario_tipo = 'directivo'
+                 LEFT JOIN personal p ON siu.usuario_id = p.id AND siu.usuario_tipo = 'personal'
+                 WHERE siu.indicador_id IN (${placeholders})
+                 ORDER BY siu.indicador_id, nombre`,
+                indicadorIds
+            );
+            usuariosAsignados = uRows;
         }
-        res.json({ success: true, data: { ...hojaRows[0], indicadores, valores, notas } });
+        res.json({ success: true, data: { ...hojaRows[0], indicadores, valores, notas, usuarios_asignados: usuariosAsignados } });
     } catch (error) {
         console.error('Error al obtener hoja SEPLADE:', error);
         res.status(500).json({ success: false, error: 'Error al obtener hoja' });
@@ -2647,6 +2661,72 @@ router.put('/seplade-valores/:indicador_id', async (req, res) => {
     } catch (error) {
         console.error('Error al actualizar valor SEPLADE:', error);
         res.status(500).json({ success: false, error: 'Error al actualizar valor' });
+    }
+});
+
+// ========== SEPLADE - ASIGNACIÓN DE USUARIOS A INDICADORES ==========
+
+// GET /seplade-usuarios - List all available users (directivos + personal)
+router.get('/seplade-usuarios', async (req, res) => {
+    try {
+        const [directivos] = await db.execute('SELECT id, nombre_completo as nombre, direccion_id FROM directivos ORDER BY nombre_completo');
+        const [personal] = await db.execute('SELECT id, nombre_completo as nombre, direccion_id FROM personal ORDER BY nombre_completo');
+        const directivosConTipo = directivos.map(d => ({ ...d, tipo: 'directivo' }));
+        const personalConTipo = personal.map(p => ({ ...p, tipo: 'personal' }));
+        res.json({ success: true, data: [...directivosConTipo, ...personalConTipo] });
+    } catch (error) {
+        console.error('Error al obtener usuarios SEPLADE:', error);
+        res.status(500).json({ success: false, error: 'Error al obtener usuarios' });
+    }
+});
+
+// POST /seplade-indicadores/:id/usuarios - Assign a user to an indicator
+router.post('/seplade-indicadores/:id/usuarios', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { usuario_id, usuario_tipo } = req.body;
+        if (!usuario_id || !usuario_tipo) {
+            return res.status(400).json({ success: false, error: 'El usuario y tipo son requeridos' });
+        }
+        if (!['directivo', 'personal'].includes(usuario_tipo)) {
+            return res.status(400).json({ success: false, error: 'Tipo de usuario inválido' });
+        }
+        const [existe] = await db.execute('SELECT id FROM seplade_indicadores WHERE id = ?', [id]);
+        if (existe.length === 0) {
+            return res.status(404).json({ success: false, error: 'Indicador no encontrado' });
+        }
+        await db.execute(
+            'INSERT INTO seplade_indicador_usuarios (indicador_id, usuario_id, usuario_tipo) VALUES (?, ?, ?)',
+            [id, usuario_id, usuario_tipo]
+        );
+        res.status(201).json({ success: true, message: 'Usuario asignado al indicador' });
+    } catch (error) {
+        if (error.code === 'ER_DUP_ENTRY') {
+            return res.status(400).json({ success: false, error: 'El usuario ya está asignado a este indicador' });
+        }
+        console.error('Error al asignar usuario:', error);
+        res.status(500).json({ success: false, error: 'Error al asignar el usuario' });
+    }
+});
+
+// DELETE /seplade-indicadores/:id/usuarios/:usuarioId/:usuarioTipo - Remove a user from an indicator
+router.delete('/seplade-indicadores/:id/usuarios/:usuarioId/:usuarioTipo', async (req, res) => {
+    try {
+        const { id, usuarioId, usuarioTipo } = req.params;
+        if (!['directivo', 'personal'].includes(usuarioTipo)) {
+            return res.status(400).json({ success: false, error: 'Tipo de usuario inválido' });
+        }
+        const [result] = await db.execute(
+            'DELETE FROM seplade_indicador_usuarios WHERE indicador_id = ? AND usuario_id = ? AND usuario_tipo = ?',
+            [id, usuarioId, usuarioTipo]
+        );
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, error: 'Asignación no encontrada' });
+        }
+        res.json({ success: true, message: 'Usuario quitado del indicador' });
+    } catch (error) {
+        console.error('Error al quitar usuario:', error);
+        res.status(500).json({ success: false, error: 'Error al quitar el usuario' });
     }
 });
 
