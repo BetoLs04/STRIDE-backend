@@ -2463,10 +2463,10 @@ router.get('/seplade-hojas', async (req, res) => {
 // POST /seplade-hojas - Create a new sheet
 router.post('/seplade-hojas', async (req, res) => {
     try {
-        const { titulo, subtitulo } = req.body;
+        const { titulo, subtitulo, nombre } = req.body;
         const [result] = await db.execute(
-            'INSERT INTO seplade_hojas (titulo, subtitulo) VALUES (?, ?)',
-            [titulo || '', subtitulo || '']
+            'INSERT INTO seplade_hojas (titulo, subtitulo, nombre) VALUES (?, ?, ?)',
+            [titulo || '', subtitulo || '', nombre || '']
         );
         const [rows] = await db.execute('SELECT * FROM seplade_hojas WHERE id = ?', [result.insertId]);
         res.json({ success: true, data: rows[0] });
@@ -2476,13 +2476,13 @@ router.post('/seplade-hojas', async (req, res) => {
     }
 });
 
-// PUT /seplade-hojas/:id - Update a sheet (title, subtitle)
+// PUT /seplade-hojas/:id - Update a sheet (title, subtitle, name)
 router.put('/seplade-hojas/:id', async (req, res) => {
     try {
-        const { titulo, subtitulo } = req.body;
+        const { titulo, subtitulo, nombre } = req.body;
         await db.execute(
-            'UPDATE seplade_hojas SET titulo = ?, subtitulo = ? WHERE id = ?',
-            [titulo ?? '', subtitulo ?? '', req.params.id]
+            'UPDATE seplade_hojas SET titulo = ?, subtitulo = ?, nombre = ? WHERE id = ?',
+            [titulo ?? '', subtitulo ?? '', nombre ?? '', req.params.id]
         );
         const [rows] = await db.execute('SELECT * FROM seplade_hojas WHERE id = ?', [req.params.id]);
         res.json({ success: true, data: rows[0] });
