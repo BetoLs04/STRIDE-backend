@@ -2585,12 +2585,22 @@ router.post('/seplade-indicadores', async (req, res) => {
 // PUT /seplade-indicadores/:id - Update an indicator's metadata
 router.put('/seplade-indicadores/:id', async (req, res) => {
     try {
-        const { nombre, nivel, unidad_medida, meta_anual, encargado, evidencia_fisica, evidencia_online } = req.body;
+        const allowed = ['nombre', 'nivel', 'unidad_medida', 'meta_anual', 'encargado', 'evidencia_fisica', 'evidencia_online'];
+        const sets = [];
+        const values = [];
+        for (const field of allowed) {
+            if (req.body[field] !== undefined) {
+                sets.push(`${field} = ?`);
+                values.push(req.body[field] ?? '');
+            }
+        }
+        if (sets.length === 0) {
+            return res.status(400).json({ success: false, error: 'No hay campos para actualizar' });
+        }
+        values.push(req.params.id);
         await db.execute(
-            `UPDATE seplade_indicadores SET nombre = ?, nivel = ?, unidad_medida = ?, meta_anual = ?,
-             encargado = ?, evidencia_fisica = ?, evidencia_online = ? WHERE id = ?`,
-            [nombre ?? '', nivel ?? '', unidad_medida ?? '', meta_anual ?? '',
-             encargado ?? '', evidencia_fisica ?? '', evidencia_online ?? '', req.params.id]
+            `UPDATE seplade_indicadores SET ${sets.join(', ')} WHERE id = ?`,
+            values
         );
         const [rows] = await db.execute('SELECT * FROM seplade_indicadores WHERE id = ?', [req.params.id]);
         res.json({ success: true, data: rows[0] });
