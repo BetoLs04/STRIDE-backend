@@ -2649,7 +2649,7 @@ router.put('/seplade-valores/:indicador_id', async (req, res) => {
             return res.status(400).json({ success: false, error: 'mes y tipo son requeridos' });
         }
         if (tipo === 'programado' || tipo === 'realizado') {
-            if (valor !== '' && !/^\d+$/.test(valor)) {
+            if (valor !== '' && !/^\d+(\.\d+)?$/.test(valor)) {
                 return res.status(400).json({ success: false, error: 'El valor debe ser numérico' });
             }
         }
