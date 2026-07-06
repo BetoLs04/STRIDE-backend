@@ -24,6 +24,9 @@ router.post('/directivos', requireSuperAdmin, async (req, res) => {
         if (!nombre_completo || !cargo || !direccion_id || !email || !password) {
             return res.status(400).json({ success: false, error: 'Todos los campos son requeridos' });
         }
+        if (!isValidEmail(email)) {
+            return res.status(400).json({ success: false, error: 'Correo electrónico inválido' });
+        }
         const hashedPassword = await bcrypt.hash(password, 12);
         const [result] = await db.execute(
             'INSERT INTO directivos (nombre_completo, cargo, direccion_id, email, password) VALUES (?, ?, ?, ?, ?)',
@@ -46,6 +49,9 @@ router.put('/directivos/:id', requireSuperAdmin, async (req, res) => {
         const { nombre_completo, cargo, direccion_id, email, password } = req.body;
         if (!nombre_completo || !cargo || !direccion_id || !email) {
             return res.status(400).json({ success: false, error: 'Nombre, cargo, dirección y email son requeridos' });
+        }
+        if (!isValidEmail(email)) {
+            return res.status(400).json({ success: false, error: 'Correo electrónico inválido' });
         }
         let updateQuery, updateParams;
         if (password && password.trim() !== '') {

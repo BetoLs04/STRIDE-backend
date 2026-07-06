@@ -6,7 +6,7 @@ const fs = require('fs');
 const db = require('../config/database');
 const { uploadPersonal } = require('../middleware/upload');
 const { requireSuperAdmin } = require('../middleware/roles');
-const { sanitize, sanitizeStr, sanitizeEmail } = require('../utils/sanitize');
+const { sanitize, sanitizeStr, sanitizeEmail, isValidEmail } = require('../utils/sanitize');
 
 router.get('/personal', async (req, res) => {
     try {
@@ -61,6 +61,10 @@ router.post('/personal', requireSuperAdmin, uploadPersonal.single('foto'), async
             if (foto) { try { fs.unlinkSync(foto.path); } catch (err) {} }
             return res.status(400).json({ success: false, error: 'Todos los campos son requeridos', campos_recibidos: { nombre_completo, puesto, direccion_id, email } });
         }
+        if (!isValidEmail(email)) {
+            if (foto) { try { fs.unlinkSync(foto.path); } catch (err) {} }
+            return res.status(400).json({ success: false, error: 'Correo electrónico inválido' });
+        }
         const hashedPassword = await bcrypt.hash(password, 12);
         const [result] = await db.execute(
             'INSERT INTO personal (nombre_completo, puesto, direccion_id, email, password, foto_perfil) VALUES (?, ?, ?, ?, ?, ?)',
@@ -85,6 +89,10 @@ router.put('/personal/:id', requireSuperAdmin, uploadPersonal.single('foto'), as
         if (!nombre_completo || !puesto || !direccion_id || !email) {
             if (req.file) fs.unlinkSync(req.file.path);
             return res.status(400).json({ success: false, error: 'Nombre, puesto, dirección y email son requeridos' });
+        }
+        if (!isValidEmail(email)) {
+            if (req.file) { try { fs.unlinkSync(req.file.path); } catch (err) {} }
+            return res.status(400).json({ success: false, error: 'Correo electrónico inválido' });
         }
         const [personalActual] = await db.execute('SELECT * FROM personal WHERE id = ?', [id]);
         if (personalActual.length === 0) {
