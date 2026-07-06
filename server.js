@@ -4,14 +4,29 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 const helmet = require('helmet');
 require('dotenv').config();
-const universityRoutes = require('./routes/universityRoutes');
 const path = require('path');
 const fs = require('fs');
 const { execSync } = require('child_process');
 
 const db = require('./config/database');
 const { setIO } = require('./config/socket');
+const { verifyToken } = require('./middleware/auth');
 
+// ========== ROUTE FILES ==========
+const uploadsRoutes = require('./routes/uploads.routes');
+const authRoutes = require('./routes/auth.routes');
+const direccionesRoutes = require('./routes/direcciones.routes');
+const directivosRoutes = require('./routes/directivos.routes');
+const personalRoutes = require('./routes/personal.routes');
+const actividadesRoutes = require('./routes/actividades.routes');
+const comunicadosRoutes = require('./routes/comunicados.routes');
+const tareasRoutes = require('./routes/tareas.routes');
+const logosRoutes = require('./routes/logos.routes');
+const matrizRoutes = require('./routes/matriz.routes');
+const smoaRoutes = require('./routes/smoa.routes');
+const sepladeRoutes = require('./routes/seplade.routes');
+
+// ========== MIGRATIONS ==========
 async function runMigrations() {
     try {
         await db.execute('ALTER TABLE matriz_columnas ADD COLUMN bloqueada TINYINT(1) DEFAULT 0 AFTER activa');
@@ -56,7 +71,6 @@ async function runMigrations() {
 }
 
 const app = express();
-//Puerto
 const PORT = process.env.PORT || 5000;
 
 // ✅ Recrear symlink de uploads automáticamente después de cada deploy
@@ -65,12 +79,10 @@ const persistentePath = '/home/u124063683/uploads_persistentes';
 
 try {
     if (fs.existsSync(uploadsDir) && !fs.lstatSync(uploadsDir).isSymbolicLink()) {
-        // Existe como carpeta normal (recién deployado), borrarla y crear symlink
         fs.rmSync(uploadsDir, { recursive: true });
         execSync(`ln -s ${persistentePath} ${uploadsDir}`);
         console.log('✅ Symlink de uploads recreado (carpeta normal reemplazada)');
     } else if (!fs.existsSync(uploadsDir)) {
-        // No existe, crear symlink
         execSync(`ln -s ${persistentePath} ${uploadsDir}`);
         console.log('✅ Symlink de uploads creado');
     } else {
@@ -86,37 +98,30 @@ app.use((req, res, next) => {
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, Origin, X-Requested-With');
     res.header('Access-Control-Allow-Credentials', 'true');
-    
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
     }
-    
     next();
 });
 
-// CORS adicional para otras peticiones
 app.use(cors({
     origin: 'https://strideutmat.com',
     credentials: true
 }));
 
-// Seguridad: helmet
 app.use(helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
     contentSecurityPolicy: false
 }));
 
-// Aumentar límite de payload para JSON
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Logs
 app.use((req, res, next) => {
     console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
     next();
 });
 
-// Servir archivos estáticos desde la carpeta uploads
 app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
     maxAge: '30d',
     etag: true,
@@ -126,7 +131,25 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
     }
 }));
 
-// Rutas
+// ========== MOUNT ROUTES ==========
+
+// Public routes (no auth needed) + mixed (uploads has internal verifyToken)
+app.use('/api/university', authRoutes);
+app.use('/api/university', uploadsRoutes);
+
+// Protected routes (all require authentication)
+app.use('/api/university', verifyToken);
+app.use('/api/university', direccionesRoutes);
+app.use('/api/university', directivosRoutes);
+app.use('/api/university', personalRoutes);
+app.use('/api/university', actividadesRoutes);
+app.use('/api/university', comunicadosRoutes);
+app.use('/api/university', tareasRoutes);
+app.use('/api/university', logosRoutes);
+app.use('/api/university', matrizRoutes);
+app.use('/api/university', smoaRoutes);
+app.use('/api/university', sepladeRoutes);
+
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
@@ -144,8 +167,6 @@ io.on('connection', (socket) => {
     });
 });
 
-app.use('/api/university', universityRoutes);
-
 // Ruta de prueba
 app.get('/', (req, res) => {
     res.json({ 
@@ -160,7 +181,6 @@ app.get('/', (req, res) => {
 // Ruta para verificar archivos estáticos
 app.get('/check-uploads', (req, res) => {
     const uploadsPath = path.join(__dirname, 'uploads', 'actividades');
-    
     if (!fs.existsSync(uploadsPath)) {
         return res.json({
             success: false,
@@ -168,7 +188,6 @@ app.get('/check-uploads', (req, res) => {
             path: uploadsPath
         });
     }
-    
     const files = fs.readdirSync(uploadsPath);
     const fileDetails = files.map(file => {
         const filePath = path.join(uploadsPath, file);
@@ -179,7 +198,6 @@ app.get('/check-uploads', (req, res) => {
             url: `https://api1.strideutmat.com/uploads/actividades/${file}`
         };
     });
-    
     res.json({
         success: true,
         totalArchivos: files.length,
