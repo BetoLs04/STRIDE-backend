@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const db = require('../config/database');
 const { requireSuperAdmin } = require('../middleware/roles');
 const { sanitize, sanitizeStr, sanitizeEmail, isValidEmail } = require('../utils/sanitize');
+const { emit } = require('../services/socketEmitter');
 
 router.get('/directivos', async (req, res) => {
     try {
@@ -33,6 +34,7 @@ router.post('/directivos', requireSuperAdmin, async (req, res) => {
             [nombre_completo, cargo, direccion_id, email, hashedPassword]
         );
         res.status(201).json({ success: true, message: 'Directivo creado exitosamente', directivoId: result.insertId });
+        emit('directivo:created', { id: result.insertId });
     } catch (error) {
         if (error.code === 'ER_DUP_ENTRY') {
             return res.status(400).json({ success: false, error: 'El email ya está registrado' });
@@ -65,6 +67,7 @@ router.put('/directivos/:id', requireSuperAdmin, async (req, res) => {
         const [result] = await db.execute(updateQuery, updateParams);
         if (result.affectedRows === 0) { return res.status(404).json({ success: false, error: 'Directivo no encontrado' }); }
         res.json({ success: true, message: 'Directivo actualizado exitosamente' });
+        emit('directivo:updated', { id: parseInt(req.params.id) });
     } catch (error) {
         if (error.code === 'ER_DUP_ENTRY') { return res.status(400).json({ success: false, error: 'El email ya está registrado' }); }
         console.error('Error al editar directivo:', error);
@@ -79,6 +82,7 @@ router.delete('/directivos/:id', requireSuperAdmin, async (req, res) => {
         if (directivos.length === 0) { return res.status(404).json({ success: false, error: 'Directivo no encontrado' }); }
         await db.execute('DELETE FROM directivos WHERE id = ?', [id]);
         res.json({ success: true, message: 'Directivo eliminado exitosamente' });
+        emit('directivo:deleted', { id: parseInt(req.params.id) });
     } catch (error) {
         console.error('Error al eliminar directivo:', error);
         res.status(500).json({ success: false, error: 'Error al eliminar el directivo' });

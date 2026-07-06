@@ -6,6 +6,7 @@ const db = require('../config/database');
 const { uploadActividades, uploadDir } = require('../middleware/upload');
 const { requireRole } = require('../middleware/roles');
 const { sanitize, sanitizeStr } = require('../utils/sanitize');
+const { emit } = require('../services/socketEmitter');
 
 router.post('/actividades', requireRole('superadmin', 'directivo'), uploadActividades.array('imagenes', 5), async (req, res) => {
     try {
@@ -39,6 +40,7 @@ router.post('/actividades', requireRole('superadmin', 'directivo'), uploadActivi
             }
         }
         res.status(201).json({ success: true, message: 'Actividad creada exitosamente', actividadId: actividadId, imagenesCount: req.files ? req.files.length : 0 });
+        emit('actividad:created', { id: actividadId });
     } catch (error) {
         console.error('❌ Error al crear actividad:', error);
         if (req.files && req.files.length > 0) {
@@ -61,6 +63,7 @@ router.put('/actividades/:id/estado', requireRole('superadmin', 'directivo'), as
             return res.status(404).json({ success: false, error: 'Actividad no encontrada' });
         }
         res.json({ success: true, message: 'Estado actualizado', affectedRows: result.affectedRows });
+        emit('actividad:estado-changed', { id: parseInt(req.params.id), estado });
     } catch (error) {
         console.error('Error al actualizar estado:', error);
         res.status(500).json({ success: false, error: 'Error al actualizar estado' });
@@ -127,6 +130,7 @@ router.put('/actividades/:id', requireRole('superadmin', 'directivo'), uploadAct
         }
         console.log(`✅ Actividad ${id} editada exitosamente`);
         res.json({ success: true, message: 'Actividad actualizada exitosamente', actividadId: id, imagenesAgregadas: imagenesAgregadas });
+        emit('actividad:updated', { id: parseInt(req.params.id) });
     } catch (error) {
         console.error('❌ Error al editar actividad:', error);
         if (req.files && req.files.length > 0) {
@@ -259,6 +263,7 @@ router.delete('/actividades/:id', requireRole('superadmin', 'directivo'), async 
         }
         console.log(`✅ Actividad ${id} eliminada exitosamente`);
         res.json({ success: true, message: 'Actividad eliminada exitosamente', actividadId: id, titulo: actividad.titulo, imagenesEliminadas: imagenesEliminadas, registrosEliminados: result.affectedRows });
+        emit('actividad:deleted', { id: parseInt(req.params.id) });
     } catch (error) {
         console.error('❌ Error al eliminar actividad:', error);
         res.status(500).json({ success: false, error: error.message || 'Error al eliminar la actividad' });

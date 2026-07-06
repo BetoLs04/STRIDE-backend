@@ -6,6 +6,7 @@ const { generateToken } = require('../middleware/auth');
 const { sanitizeStr, sanitizeEmail, isValidEmail } = require('../utils/sanitize');
 const { loginLimiter, createUserLimiter } = require('../middleware/rateLimiters');
 const { requireSuperAdmin } = require('../middleware/roles');
+const { emit } = require('../services/socketEmitter');
 
 router.post('/create-superuser', requireSuperAdmin, createUserLimiter, async (req, res) => {
     try {
@@ -27,6 +28,7 @@ router.post('/create-superuser', requireSuperAdmin, createUserLimiter, async (re
             [username, email, hashedPassword]
         );
         res.status(201).json({ success: true, message: 'Super usuario creado exitosamente', userId: result.insertId });
+        emit('superuser:created', { userId: result.insertId });
     } catch (error) {
         if (error.code === 'ER_DUP_ENTRY') {
             return res.status(400).json({ success: false, error: 'El usuario o email ya existe' });

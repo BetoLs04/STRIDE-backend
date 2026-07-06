@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const { logoDir } = require('../middleware/upload');
 const { requireSuperAdmin } = require('../middleware/roles');
+const { emit } = require('../services/socketEmitter');
 
 router.post('/upload-logo', requireSuperAdmin, async (req, res) => {
   try {
@@ -36,6 +37,7 @@ router.post('/upload-logo', requireSuperAdmin, async (req, res) => {
       });
       fs.writeFileSync(filePath, fileBuffer);
       res.json({ success: true, message: 'Logo subido exitosamente', filename: newFileName, path: filePath });
+      emit('logo:updated', { filename: newFileName });
     });
     req.pipe(bb);
   } catch (error) {
@@ -53,6 +55,7 @@ router.delete('/delete-logo', requireSuperAdmin, (req, res) => {
       if (file.startsWith('institution-logo')) { fs.unlinkSync(path.join(logoDir, file)); deletedCount++; }
     });
     res.json({ success: true, message: 'Logo eliminado', deletedCount: deletedCount });
+    emit('logo:updated', { deleted: true });
   } catch (error) {
     console.error('Error eliminando logo:', error);
     res.status(500).json({ success: false, error: 'Error al eliminar logo' });

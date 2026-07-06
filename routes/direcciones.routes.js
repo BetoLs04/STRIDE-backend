@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../config/database');
 const { requireSuperAdmin } = require('../middleware/roles');
 const { sanitize } = require('../utils/sanitize');
+const { emit } = require('../services/socketEmitter');
 
 router.get('/direcciones', async (req, res) => {
     try {
@@ -22,6 +23,7 @@ router.post('/direcciones', requireSuperAdmin, async (req, res) => {
         }
         const [result] = await db.execute('INSERT INTO direcciones (nombre) VALUES (?)', [nombre]);
         res.status(201).json({ success: true, message: 'Dirección creada exitosamente', direccionId: result.insertId });
+        emit('direccion:created', { id: result.insertId });
     } catch (error) {
         if (error.code === 'ER_DUP_ENTRY') {
             return res.status(400).json({ success: false, error: 'Esta dirección ya existe' });

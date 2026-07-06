@@ -7,6 +7,7 @@ const { uploadSmoa, uploadSmoaCol, uploadSmoaEditorImg, smoaEditorImgDir } = req
 const { API_BASE_URL, TIPOS_USUARIO_VALIDOS, TIPOS_DATO_SMOA, PERMISOS_SUBIDA_SMOA } = require('../utils/constants');
 const { requireSuperAdmin } = require('../middleware/roles');
 const { sanitize, sanitizeStr } = require('../utils/sanitize');
+const { emit } = require('../services/socketEmitter');
 
 // ========== ENCABEZADO ==========
 
@@ -45,6 +46,7 @@ router.put('/smoa-encabezado', requireSuperAdmin, async (req, res) => {
         }
         const [updated] = await db.execute('SELECT * FROM smoa_encabezado LIMIT 1');
         res.json({ success: true, data: updated[0], message: 'Encabezado SMOA guardado' });
+        emit('smoa:updated', { type: 'encabezado:updated' });
     } catch (error) {
         console.error('Error al guardar encabezado SMOA:', error);
         res.status(500).json({ success: false, error: 'Error al guardar encabezado SMOA' });
@@ -99,6 +101,7 @@ router.post('/smoa-usuarios', requireSuperAdmin, async (req, res) => {
             [usuario_id, usuario_tipo]
         );
         res.status(201).json({ success: true, message: 'Usuario asignado a SMOA' });
+        emit('smoa:updated', { type: 'usuario:created' });
     } catch (error) {
         if (error.code === 'ER_DUP_ENTRY') {
             return res.status(400).json({ success: false, error: 'El usuario ya está asignado' });
@@ -116,6 +119,7 @@ router.delete('/smoa-usuarios/:id', requireSuperAdmin, async (req, res) => {
             return res.status(404).json({ success: false, error: 'Asignación no encontrada' });
         }
         res.json({ success: true, message: 'Usuario quitado de SMOA' });
+        emit('smoa:updated', { type: 'usuario:deleted' });
     } catch (error) {
         console.error('Error al quitar usuario SMOA:', error);
         res.status(500).json({ success: false, error: 'Error al quitar el usuario' });
@@ -145,6 +149,7 @@ router.post('/smoa-columnas', requireSuperAdmin, async (req, res) => {
         const permiso = PERMISOS_SUBIDA_SMOA.includes(permiso_subida) ? permiso_subida : 'todos';
         const [result] = await db.execute('INSERT INTO smoa_columnas (nombre, tipo_dato, permiso_subida) VALUES (?, ?, ?)', [nombre.trim(), tipo, permiso]);
         res.status(201).json({ success: true, message: 'Columna SMOA creada', columnaId: result.insertId });
+        emit('smoa:updated', { type: 'columna:created', id: result.insertId });
     } catch (error) {
         console.error('Error al crear columna SMOA:', error);
         res.status(500).json({ success: false, error: 'Error al crear la columna' });
@@ -167,6 +172,7 @@ router.put('/smoa-columnas/:id', requireSuperAdmin, async (req, res) => {
         }
         const [updated] = await db.execute('SELECT * FROM smoa_columnas WHERE id = ?', [id]);
         res.json({ success: true, data: updated[0], message: 'Columna SMOA actualizada' });
+        emit('smoa:updated', { type: 'columna:updated', id: parseInt(req.params.id) });
     } catch (error) {
         console.error('Error al actualizar columna SMOA:', error);
         res.status(500).json({ success: false, error: 'Error al actualizar la columna' });
@@ -181,6 +187,7 @@ router.delete('/smoa-columnas/:id', requireSuperAdmin, async (req, res) => {
             return res.status(404).json({ success: false, error: 'Columna no encontrada' });
         }
         res.json({ success: true, message: 'Columna SMOA eliminada' });
+        emit('smoa:updated', { type: 'columna:deleted', id: parseInt(req.params.id) });
     } catch (error) {
         console.error('Error al eliminar columna SMOA:', error);
         res.status(500).json({ success: false, error: 'Error al eliminar la columna' });
@@ -208,6 +215,7 @@ router.post('/smoa-filas', requireSuperAdmin, async (req, res) => {
         );
         const [nueva] = await db.execute('SELECT * FROM smoa_filas WHERE id = ?', [result.insertId]);
         res.status(201).json({ success: true, data: nueva[0], message: 'Fila SMOA agregada' });
+        emit('smoa:updated', { type: 'fila:created', id: result.insertId });
     } catch (error) {
         console.error('Error al crear fila SMOA:', error);
         res.status(500).json({ success: false, error: 'Error al crear la fila' });
@@ -227,6 +235,7 @@ router.put('/smoa-filas/:id', requireSuperAdmin, async (req, res) => {
         }
         const [updated] = await db.execute('SELECT * FROM smoa_filas WHERE id = ?', [id]);
         res.json({ success: true, data: updated[0], message: 'Fila SMOA actualizada' });
+        emit('smoa:updated', { type: 'fila:updated', id: parseInt(req.params.id) });
     } catch (error) {
         console.error('Error al actualizar fila SMOA:', error);
         res.status(500).json({ success: false, error: 'Error al actualizar la fila' });
@@ -241,6 +250,7 @@ router.delete('/smoa-filas/:id', requireSuperAdmin, async (req, res) => {
             return res.status(404).json({ success: false, error: 'Fila no encontrada' });
         }
         res.json({ success: true, message: 'Fila SMOA eliminada' });
+        emit('smoa:updated', { type: 'fila:deleted', id: parseInt(req.params.id) });
     } catch (error) {
         console.error('Error al eliminar fila SMOA:', error);
         res.status(500).json({ success: false, error: 'Error al eliminar la fila' });
@@ -288,6 +298,7 @@ router.put('/smoa-filas/:id/pptx', requireSuperAdmin, (req, res, next) => {
         await db.execute('UPDATE smoa_filas SET valores = ? WHERE id = ?', [JSON.stringify(valores), id]);
         const [updated] = await db.execute('SELECT * FROM smoa_filas WHERE id = ?', [id]);
         res.json({ success: true, data: updated[0], message: 'Presentación actualizada' });
+        emit('smoa:updated', { type: 'fila:pptx-updated', id: parseInt(req.params.id) });
     } catch (error) {
         console.error('Error al actualizar presentación SMOA:', error);
         res.status(500).json({ success: false, error: 'Error al actualizar presentación' });
@@ -321,6 +332,7 @@ router.post('/smoa-filas/:filaId/columna/:columnaId/subir', requireSuperAdmin, u
         await db.execute('UPDATE smoa_filas SET valores = ? WHERE id = ?', [JSON.stringify(valores), filaId]);
         const [updated] = await db.execute('SELECT * FROM smoa_filas WHERE id = ?', [filaId]);
         res.json({ success: true, data: updated[0], filename: req.file.filename, message: 'Archivo subido exitosamente' });
+        emit('smoa:updated', { type: 'columna:archivo-subido', filaId: parseInt(req.params.filaId), columnaId: parseInt(req.params.columnaId) });
     } catch (error) {
         console.error('Error al subir archivo a columna:', error);
         res.status(500).json({ success: false, error: error.message || 'Error al subir archivo' });
@@ -347,6 +359,7 @@ router.delete('/smoa-filas/:filaId/columna/:columnaId/eliminar', requireSuperAdm
         await db.execute('UPDATE smoa_filas SET valores = ? WHERE id = ?', [JSON.stringify(valores), filaId]);
         const [updated] = await db.execute('SELECT * FROM smoa_filas WHERE id = ?', [filaId]);
         res.json({ success: true, data: updated[0], message: 'Archivo eliminado' });
+        emit('smoa:updated', { type: 'columna:archivo-eliminado', filaId: parseInt(req.params.filaId), columnaId: parseInt(req.params.columnaId) });
     } catch (error) {
         console.error('Error al eliminar archivo de columna:', error);
         res.status(500).json({ success: false, error: error.message || 'Error al eliminar archivo' });
@@ -410,6 +423,7 @@ router.put('/smoa-filas/:id/permisos-pptx', requireSuperAdmin, async (req, res) 
             }
         }
         res.json({ success: true, message: 'Permisos actualizados' });
+        emit('smoa:updated', { type: 'permisos-pptx:updated', filaId: parseInt(req.params.id) });
     } catch (error) {
         console.error('Error al actualizar permisos pptx:', error);
         res.status(500).json({ success: false, error: 'Error al actualizar permisos' });

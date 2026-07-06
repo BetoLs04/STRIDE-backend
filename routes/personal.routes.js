@@ -7,6 +7,7 @@ const db = require('../config/database');
 const { uploadPersonal } = require('../middleware/upload');
 const { requireSuperAdmin } = require('../middleware/roles');
 const { sanitize, sanitizeStr, sanitizeEmail, isValidEmail } = require('../utils/sanitize');
+const { emit } = require('../services/socketEmitter');
 
 router.get('/personal', async (req, res) => {
     try {
@@ -71,6 +72,7 @@ router.post('/personal', requireSuperAdmin, uploadPersonal.single('foto'), async
             [nombre_completo, puesto, direccion_id, email, hashedPassword, foto ? foto.filename : null]
         );
         res.status(201).json({ success: true, message: 'Personal creado exitosamente', personalId: result.insertId, tieneFoto: !!foto });
+        emit('personal:created', { id: result.insertId });
     } catch (error) {
         if (req.file) { try { fs.unlinkSync(req.file.path); } catch (err) {} }
         if (error.code === 'ER_DUP_ENTRY') {
@@ -119,6 +121,7 @@ router.put('/personal/:id', requireSuperAdmin, uploadPersonal.single('foto'), as
         }
         await db.execute(updateQuery, updateParams);
         res.json({ success: true, message: 'Personal actualizado exitosamente' });
+        emit('personal:updated', { id: parseInt(req.params.id) });
     } catch (error) {
         if (req.file) { try { fs.unlinkSync(req.file.path); } catch (e) {} }
         if (error.code === 'ER_DUP_ENTRY') { return res.status(400).json({ success: false, error: 'El email ya está registrado' }); }
@@ -139,6 +142,7 @@ router.delete('/personal/:id', requireSuperAdmin, async (req, res) => {
         }
         await db.execute('DELETE FROM personal WHERE id = ?', [id]);
         res.json({ success: true, message: 'Personal eliminado exitosamente' });
+        emit('personal:deleted', { id: parseInt(req.params.id) });
     } catch (error) {
         console.error('Error al eliminar personal:', error);
         res.status(500).json({ success: false, error: 'Error al eliminar el personal' });

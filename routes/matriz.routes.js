@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
 const { getIO } = require('../config/socket');
+const { emit } = require('../services/socketEmitter');
 const { CAMPOS_BLOQUEO_MAP, TIPOS_USUARIO_VALIDOS, ALINEACIONES_VALIDAS } = require('../utils/constants');
 const { requireSuperAdmin } = require('../middleware/roles');
 const { sanitize, sanitizeStr } = require('../utils/sanitize');
@@ -65,6 +66,7 @@ router.post('/matriz-secciones', async (req, res) => {
         }
         const [result] = await db.execute('INSERT INTO matriz_secciones (nombre) VALUES (?)', [nombre.trim()]);
         res.status(201).json({ success: true, message: 'Sección creada', seccionId: result.insertId });
+        emit('matriz:updated', { type: 'seccion:created', id: result.insertId });
     } catch (error) {
         console.error('Error al crear sección:', error);
         res.status(500).json({ success: false, error: 'Error al crear la sección' });
@@ -84,6 +86,7 @@ router.put('/matriz-secciones/:id', async (req, res) => {
             return res.status(404).json({ success: false, error: 'Sección no encontrada' });
         }
         res.json({ success: true, message: 'Sección actualizada' });
+        emit('matriz:updated', { type: 'seccion:updated', id: parseInt(req.params.id) });
     } catch (error) {
         console.error('Error al actualizar sección:', error);
         res.status(500).json({ success: false, error: 'Error al actualizar la sección' });
@@ -98,6 +101,7 @@ router.delete('/matriz-secciones/:id', async (req, res) => {
             return res.status(404).json({ success: false, error: 'Sección no encontrada' });
         }
         res.json({ success: true, message: 'Sección eliminada' });
+        emit('matriz:updated', { type: 'seccion:deleted', id: parseInt(req.params.id) });
     } catch (error) {
         console.error('Error al eliminar sección:', error);
         res.status(500).json({ success: false, error: 'Error al eliminar la sección' });
@@ -125,6 +129,7 @@ router.post('/matriz-secciones/:id/usuarios', async (req, res) => {
             [id, usuario_id, usuario_tipo]
         );
         res.status(201).json({ success: true, message: 'Usuario asignado a la sección' });
+        emit('matriz:updated', { type: 'usuario:asignado', seccionId: parseInt(req.params.id) });
     } catch (error) {
         if (error.code === 'ER_DUP_ENTRY') {
             return res.status(400).json({ success: false, error: 'El usuario ya está asignado a esta sección' });
@@ -148,6 +153,7 @@ router.delete('/matriz-secciones/:id/usuarios/:usuarioId/:usuarioTipo', async (r
             return res.status(404).json({ success: false, error: 'Asignación no encontrada' });
         }
         res.json({ success: true, message: 'Usuario quitado de la sección' });
+        emit('matriz:updated', { type: 'usuario:quitado', seccionId: parseInt(req.params.id) });
     } catch (error) {
         console.error('Error al quitar usuario:', error);
         res.status(500).json({ success: false, error: 'Error al quitar el usuario' });
@@ -191,6 +197,7 @@ router.put('/matriz-encabezado', async (req, res) => {
         }
         const [updated] = await db.execute('SELECT * FROM matriz_encabezado LIMIT 1');
         res.json({ success: true, data: updated[0], message: 'Encabezado guardado' });
+        emit('matriz:updated', { type: 'encabezado:updated' });
     } catch (error) {
         console.error('Error al guardar encabezado:', error);
         res.status(500).json({ success: false, error: 'Error al guardar encabezado' });
@@ -218,6 +225,7 @@ router.post('/matriz-columnas', async (req, res) => {
         }
         const [result] = await db.execute('INSERT INTO matriz_columnas (nombre) VALUES (?)', [nombre.trim()]);
         res.status(201).json({ success: true, message: 'Columna creada', columnaId: result.insertId });
+        emit('matriz:updated', { type: 'columna:created', id: result.insertId });
     } catch (error) {
         console.error('Error al crear columna:', error);
         res.status(500).json({ success: false, error: 'Error al crear la columna' });
@@ -239,6 +247,7 @@ router.put('/matriz-columnas/:id', async (req, res) => {
         }
         const [updated] = await db.execute('SELECT * FROM matriz_columnas WHERE id = ?', [id]);
         res.json({ success: true, data: updated[0], message: 'Columna actualizada' });
+        emit('matriz:updated', { type: 'columna:updated', id: parseInt(req.params.id) });
     } catch (error) {
         console.error('Error al actualizar columna:', error);
         res.status(500).json({ success: false, error: 'Error al actualizar la columna' });
@@ -260,6 +269,7 @@ router.put('/matriz-columnas/:id/alineacion', async (req, res) => {
         const io = getIO();
         if (io) io.emit('matriz-update', { type: 'alineacion-change', columnaId: parseInt(id) });
         res.json({ success: true, data: updated[0], message: 'Alineación actualizada' });
+        emit('matriz:updated', { type: 'columna:alineacion', id: parseInt(req.params.id) });
     } catch (error) {
         console.error('Error al actualizar alineación:', error);
         res.status(500).json({ success: false, error: 'Error al actualizar alineación' });
@@ -278,6 +288,7 @@ router.put('/matriz-columnas/:id/toggle', async (req, res) => {
         const io = getIO();
         if (io) io.emit('matriz-update', { type: 'columna-toggle', columnaId: parseInt(id) });
         res.json({ success: true, message: nuevaBloqueada ? 'Columna bloqueada' : 'Columna desbloqueada', bloqueada: !!nuevaBloqueada });
+        emit('matriz:updated', { type: 'columna:toggle', id: parseInt(req.params.id) });
     } catch (error) {
         console.error('Error al toggle columna:', error);
         res.status(500).json({ success: false, error: 'Error al cambiar estado de la columna' });
@@ -300,6 +311,7 @@ router.put('/matriz-encabezado/toggle-bloqueo/:campo', async (req, res) => {
         const io = getIO();
         if (io) io.emit('matriz-update', { type: 'bloqueo-change', campo });
         res.json({ success: true, [campo]: !!nuevoValor, message: nuevoValor ? 'Columna bloqueada' : 'Columna desbloqueada' });
+        emit('matriz:updated', { type: 'bloqueo:toggle', campo });
     } catch (error) {
         console.error('Error al toggle bloqueo:', error);
         res.status(500).json({ success: false, error: 'Error al cambiar bloqueo' });
@@ -314,6 +326,7 @@ router.delete('/matriz-columnas/:id', async (req, res) => {
             return res.status(404).json({ success: false, error: 'Columna no encontrada' });
         }
         res.json({ success: true, message: 'Columna eliminada' });
+        emit('matriz:updated', { type: 'columna:deleted', id: parseInt(req.params.id) });
     } catch (error) {
         console.error('Error al eliminar columna:', error);
         res.status(500).json({ success: false, error: 'Error al eliminar la columna' });
@@ -353,6 +366,7 @@ router.post('/matriz-filas', async (req, res) => {
         );
         const [nueva] = await db.execute('SELECT * FROM matriz_filas WHERE id = ?', [result.insertId]);
         res.status(201).json({ success: true, data: nueva[0], message: 'Fila agregada' });
+        emit('matriz:updated', { type: 'fila:created', id: result.insertId });
     } catch (error) {
         console.error('Error al crear fila:', error);
         res.status(500).json({ success: false, error: 'Error al crear la fila' });
@@ -372,6 +386,7 @@ router.put('/matriz-filas/:id', async (req, res) => {
         }
         const [updated] = await db.execute('SELECT * FROM matriz_filas WHERE id = ?', [id]);
         res.json({ success: true, data: updated[0], message: 'Fila actualizada' });
+        emit('matriz:updated', { type: 'fila:updated', id: parseInt(req.params.id) });
     } catch (error) {
         console.error('Error al actualizar fila:', error);
         res.status(500).json({ success: false, error: 'Error al actualizar la fila' });
@@ -386,6 +401,7 @@ router.delete('/matriz-filas/:id', async (req, res) => {
             return res.status(404).json({ success: false, error: 'Fila no encontrada' });
         }
         res.json({ success: true, message: 'Fila eliminada' });
+        emit('matriz:updated', { type: 'fila:deleted', id: parseInt(req.params.id) });
     } catch (error) {
         console.error('Error al eliminar fila:', error);
         res.status(500).json({ success: false, error: 'Error al eliminar la fila' });

@@ -4,6 +4,7 @@ const db = require('../config/database');
 const { TIPOS_USUARIO_VALIDOS } = require('../utils/constants');
 const { requireSuperAdmin } = require('../middleware/roles');
 const { sanitize, sanitizeStr } = require('../utils/sanitize');
+const { emit } = require('../services/socketEmitter');
 
 // ========== HOJAS ==========
 
@@ -27,6 +28,7 @@ router.post('/seplade-hojas', requireSuperAdmin, async (req, res) => {
         );
         const [rows] = await db.execute('SELECT * FROM seplade_hojas WHERE id = ?', [result.insertId]);
         res.json({ success: true, data: rows[0] });
+        emit('seplade:updated', { type: 'hoja:created', id: result.insertId });
     } catch (error) {
         console.error('Error al crear hoja SEPLADE:', error);
         res.status(500).json({ success: false, error: 'Error al crear hoja' });
@@ -43,6 +45,7 @@ router.put('/seplade-hojas/:id', requireSuperAdmin, async (req, res) => {
         );
         const [rows] = await db.execute('SELECT * FROM seplade_hojas WHERE id = ?', [req.params.id]);
         res.json({ success: true, data: rows[0] });
+        emit('seplade:updated', { type: 'hoja:updated', id: parseInt(req.params.id) });
     } catch (error) {
         console.error('Error al actualizar hoja SEPLADE:', error);
         res.status(500).json({ success: false, error: 'Error al actualizar hoja' });
@@ -53,6 +56,7 @@ router.delete('/seplade-hojas/:id', requireSuperAdmin, async (req, res) => {
     try {
         await db.execute('DELETE FROM seplade_hojas WHERE id = ?', [req.params.id]);
         res.json({ success: true, message: 'Hoja eliminada' });
+        emit('seplade:updated', { type: 'hoja:deleted', id: parseInt(req.params.id) });
     } catch (error) {
         console.error('Error al eliminar hoja SEPLADE:', error);
         res.status(500).json({ success: false, error: 'Error al eliminar hoja' });
@@ -131,6 +135,7 @@ router.post('/seplade-indicadores', requireSuperAdmin, async (req, res) => {
         );
         const [rows] = await db.execute('SELECT * FROM seplade_indicadores WHERE id = ?', [result.insertId]);
         res.json({ success: true, data: rows[0] });
+        emit('seplade:updated', { type: 'indicador:created', id: result.insertId });
     } catch (error) {
         console.error('Error al crear indicador SEPLADE:', error);
         res.status(500).json({ success: false, error: 'Error al crear indicador' });
@@ -159,6 +164,7 @@ router.put('/seplade-indicadores/:id', requireSuperAdmin, async (req, res) => {
         );
         const [rows] = await db.execute('SELECT * FROM seplade_indicadores WHERE id = ?', [req.params.id]);
         res.json({ success: true, data: rows[0] });
+        emit('seplade:updated', { type: 'indicador:updated', id: parseInt(req.params.id) });
     } catch (error) {
         console.error('Error al actualizar indicador SEPLADE:', error);
         res.status(500).json({ success: false, error: 'Error al actualizar indicador' });
@@ -169,6 +175,7 @@ router.delete('/seplade-indicadores/:id', requireSuperAdmin, async (req, res) =>
     try {
         await db.execute('DELETE FROM seplade_indicadores WHERE id = ?', [req.params.id]);
         res.json({ success: true, message: 'Indicador eliminado' });
+        emit('seplade:updated', { type: 'indicador:deleted', id: parseInt(req.params.id) });
     } catch (error) {
         console.error('Error al eliminar indicador SEPLADE:', error);
         res.status(500).json({ success: false, error: 'Error al eliminar indicador' });
@@ -199,6 +206,7 @@ router.put('/seplade-notas/:indicador_id/:mes', async (req, res) => {
             [req.params.indicador_id, req.params.mes, nota ?? '']
         );
         res.json({ success: true, message: 'Nota guardada' });
+        emit('seplade:updated', { type: 'nota:updated', indicadorId: parseInt(req.params.indicador_id), mes: parseInt(req.params.mes) });
     } catch (error) {
         console.error('Error al guardar nota SEPLADE:', error);
         res.status(500).json({ success: false, error: 'Error al guardar nota' });
@@ -223,6 +231,7 @@ router.put('/seplade-valores/:indicador_id', async (req, res) => {
             [valor ?? '', req.params.indicador_id, mes, tipo]
         );
         res.json({ success: true, message: 'Valor actualizado' });
+        emit('seplade:updated', { type: 'valor:updated', indicadorId: parseInt(req.params.indicador_id), mes: parseInt(req.body.mes), tipo: req.body.tipo });
     } catch (error) {
         console.error('Error al actualizar valor SEPLADE:', error);
         res.status(500).json({ success: false, error: 'Error al actualizar valor' });
@@ -263,6 +272,7 @@ router.post('/seplade-indicadores/:id/usuarios', requireSuperAdmin, async (req, 
             [id, usuario_id, usuario_tipo]
         );
         res.status(201).json({ success: true, message: 'Usuario asignado al indicador' });
+        emit('seplade:updated', { type: 'usuario:asignado', indicadorId: parseInt(req.params.id) });
     } catch (error) {
         if (error.code === 'ER_DUP_ENTRY') {
             return res.status(400).json({ success: false, error: 'El usuario ya está asignado a este indicador' });
@@ -286,6 +296,7 @@ router.delete('/seplade-indicadores/:id/usuarios/:usuarioId/:usuarioTipo', requi
             return res.status(404).json({ success: false, error: 'Asignación no encontrada' });
         }
         res.json({ success: true, message: 'Usuario quitado del indicador' });
+        emit('seplade:updated', { type: 'usuario:quitado', indicadorId: parseInt(req.params.id) });
     } catch (error) {
         console.error('Error al quitar usuario:', error);
         res.status(500).json({ success: false, error: 'Error al quitar el usuario' });

@@ -7,6 +7,7 @@ const { uploadComunicados, comunicadosDir } = require('../middleware/upload');
 const { API_BASE_URL } = require('../utils/constants');
 const { requireSuperAdmin } = require('../middleware/roles');
 const { sanitize, sanitizeStr } = require('../utils/sanitize');
+const { emit } = require('../services/socketEmitter');
 
 router.post('/comunicados', requireSuperAdmin, uploadComunicados.array('archivos', 5), async (req, res) => {
     try {
@@ -30,6 +31,7 @@ router.post('/comunicados', requireSuperAdmin, uploadComunicados.array('archivos
             }
         }
         res.status(201).json({ success: true, message: 'Comunicado publicado exitosamente', comunicadoId });
+        emit('comunicado:created', { id: comunicadoId });
     } catch (error) {
         console.error('❌ Error al crear comunicado:', error);
         res.status(500).json({ success: false, error: error.message || 'Error al crear el comunicado' });
@@ -116,6 +118,7 @@ router.put('/comunicados/:id', requireSuperAdmin, uploadComunicados.array('archi
             }
         }
         res.json({ success: true, message: 'Comunicado actualizado exitosamente' });
+        emit('comunicado:updated', { id: parseInt(req.params.id) });
     } catch (error) {
         console.error('Error al actualizar comunicado:', error);
         res.status(500).json({ success: false, error: 'Error al actualizar comunicado' });
@@ -133,6 +136,7 @@ router.delete('/comunicados/:id', requireSuperAdmin, async (req, res) => {
         const [result] = await db.execute('DELETE FROM comunicados WHERE id = ?', [id]);
         if (result.affectedRows === 0) { return res.status(404).json({ success: false, error: 'Comunicado no encontrado' }); }
         res.json({ success: true, message: 'Comunicado eliminado exitosamente' });
+        emit('comunicado:deleted', { id: parseInt(req.params.id) });
     } catch (error) {
         console.error('Error al eliminar comunicado:', error);
         res.status(500).json({ success: false, error: 'Error al eliminar comunicado' });
@@ -149,6 +153,7 @@ router.delete('/comunicados/:id/archivo/:archivoId', requireSuperAdmin, async (r
         if (fs.existsSync(filePath)) { fs.unlinkSync(filePath); }
         await db.execute(`DELETE FROM comunicados_archivos WHERE id = ?`, [archivoId]);
         res.json({ success: true, message: 'Archivo eliminado exitosamente' });
+        emit('comunicado:archivo-deleted', { id: parseInt(req.params.id), archivoId: parseInt(archivoId) });
     } catch (error) {
         console.error('Error al eliminar archivo:', error);
         res.status(500).json({ success: false, error: 'Error al eliminar archivo' });

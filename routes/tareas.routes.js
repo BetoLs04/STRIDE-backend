@@ -6,6 +6,7 @@ const db = require('../config/database');
 const { uploadTareas } = require('../middleware/upload');
 const { requireSuperAdmin } = require('../middleware/roles');
 const { sanitize, sanitizeStr } = require('../utils/sanitize');
+const { emit } = require('../services/socketEmitter');
 
 router.get('/tareas/usuarios-disponibles', async (req, res) => {
     try {
@@ -67,7 +68,9 @@ router.post('/tareas', requireSuperAdmin, uploadTareas.array('archivos', 5), asy
             `INSERT INTO tareas_historial (tarea_id, usuario_id, usuario_tipo, accion, descripcion) VALUES (?, ?, ?, 'creada', ?)`,
             [tareaId, creado_por_id, creado_por_tipo, `Tarea creada con ${asignacionesArray.length} asignaciones`]
         );
-        await connection.commit(); connection.release();
+        await connection.commit();
+        emit('tarea:created', { id: tareaId });
+        connection.release();
         res.status(201).json({ success: true, message: 'Tarea creada exitosamente', tareaId: tareaId, asignaciones: asignacionesArray.length, archivos: req.files?.length || 0 });
     } catch (error) {
         await connection.rollback(); connection.release();
@@ -213,7 +216,9 @@ router.post('/tareas/completar/:asignacionId', uploadTareas.array('archivos', 5)
       `INSERT INTO tareas_historial (tarea_id, usuario_id, usuario_tipo, accion, descripcion) VALUES (?, ?, 'personal', 'completada', ?)`,
       [asignacion.tarea_id, asignacion.usuario_id, `Tarea completada${comentarios ? ' con comentarios' : ''}${req.files?.length > 0 ? ' y ' + req.files.length + ' archivo(s)' : ''}`]
     );
-    await connection.commit(); connection.release();
+    await connection.commit();
+    emit('tarea:completada', { asignacionId: parseInt(asignacionId) });
+    connection.release();
     res.json({ success: true, message: '¡Felicidades! Tarea completada exitosamente', data: { tarea: asignacion.titulo, comentarios: comentarios || null, archivos: archivosGuardados.length } });
   } catch (error) {
     await connection.rollback(); connection.release();
@@ -244,7 +249,9 @@ router.put('/tareas/asignacion/:id', requireSuperAdmin, async (req, res) => {
             `INSERT INTO tareas_historial (tarea_id, usuario_id, usuario_tipo, accion, descripcion) VALUES (?, ?, ?, 'actualizacion', ?)`,
             [asignacion.tarea_id, usuario_id || 1, usuario_tipo || 'superadmin', `Estado de asignación actualizado a: ${estado}`]
         );
-        await connection.commit(); connection.release();
+        await connection.commit();
+        emit('tarea:asignacion-updated', { id: parseInt(req.params.id) });
+        connection.release();
         res.json({ success: true, message: 'Estado actualizado correctamente' });
     } catch (error) {
         await connection.rollback(); connection.release();
@@ -263,6 +270,7 @@ router.delete('/tareas/archivo/:archivoId', async (req, res) => {
     if (fs.existsSync(filePath)) { fs.unlinkSync(filePath); }
     await db.execute('DELETE FROM tareas_archivos WHERE id = ?', [archivoId]);
     res.json({ success: true, message: 'Archivo eliminado' });
+    emit('tarea:archivo-deleted', { archivoId: parseInt(archivoId) });
   } catch (error) {
     console.error('Error eliminando archivo:', error);
     res.status(500).json({ success: false, error: 'Error al eliminar archivo' });
@@ -349,7 +357,9 @@ router.put('/tareas/:id', requireSuperAdmin, uploadTareas.array('archivos', 5), 
         );
       }
     }
-    await connection.commit(); connection.release();
+    await connection.commit();
+    emit('tarea:updated', { id: parseInt(req.params.id) });
+    connection.release();
     res.json({ success: true, message: 'Tarea actualizada exitosamente' });
   } catch (error) {
     await connection.rollback(); connection.release();
@@ -375,7 +385,9 @@ router.delete('/tareas/:id', requireSuperAdmin, async (req, res) => {
             await connection.rollback(); connection.release();
             return res.status(404).json({ success: false, error: 'Tarea no encontrada' });
         }
-        await connection.commit(); connection.release();
+        await connection.commit();
+        emit('tarea:deleted', { id: parseInt(req.params.id) });
+        connection.release();
         res.json({ success: true, message: 'Tarea eliminada exitosamente', archivosEliminados: archivos.length });
     } catch (error) {
         await connection.rollback(); connection.release();
