@@ -2,13 +2,13 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const db = require('../config/database');
-const { generateToken } = require('../middleware/auth');
+const { generateToken, verifyToken } = require('../middleware/auth');
 const { sanitizeStr, sanitizeEmail, isValidEmail } = require('../utils/sanitize');
 const { loginLimiter, createUserLimiter } = require('../middleware/rateLimiters');
 const { requireSuperAdmin } = require('../middleware/roles');
 const { emit } = require('../services/socketEmitter');
 
-router.post('/create-superuser', requireSuperAdmin, createUserLimiter, async (req, res) => {
+router.post('/create-superuser', createUserLimiter, async (req, res) => {
     try {
         const username = sanitizeStr(req.body.username);
         const email = sanitizeEmail(req.body.email);
@@ -141,7 +141,7 @@ router.get('/check-superadmin', async (req, res) => {
     }
 });
 
-router.get('/superusers', requireSuperAdmin, async (req, res) => {
+router.get('/superusers', verifyToken, requireSuperAdmin, async (req, res) => {
     try {
         const [users] = await db.execute('SELECT id, username, email, created_at FROM super_users ORDER BY created_at DESC');
         res.json({ success: true, data: users });
