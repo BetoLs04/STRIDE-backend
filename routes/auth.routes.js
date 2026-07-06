@@ -128,6 +128,17 @@ router.post('/login-general', loginLimiter, async (req, res) => {
     }
 });
 
+router.get('/check-superadmin', async (req, res) => {
+    try {
+        const [users] = await db.execute('SELECT COUNT(*) as total FROM super_users');
+        console.log('🔍 Check superadmin:', users[0].total > 0 ? 'existe' : 'no existe');
+        res.json({ success: true, exists: users[0].total > 0 });
+    } catch (error) {
+        console.error('Error al verificar superadmin:', error);
+        res.status(500).json({ success: false, error: 'Error al verificar superadmin' });
+    }
+});
+
 router.get('/superusers', requireSuperAdmin, async (req, res) => {
     try {
         const [users] = await db.execute('SELECT id, username, email, created_at FROM super_users ORDER BY created_at DESC');
