@@ -8,6 +8,31 @@ const path = require('path');
 const fs = require('fs');
 const { generateToken, verifyToken } = require('../middleware/auth');
 
+// ========== VALIDACIÓN Y SANITIZACIÓN ==========
+const sanitizeStr = (val) => typeof val === 'string' ? val.trim().replace(/[\0\x08\x09\x1a\n\r"'\\%_]/g, '').substring(0, 255) : '';
+const sanitizeEmail = (val) => typeof val === 'string' ? val.trim().toLowerCase().replace(/[<>()\[\]\\,;:\s"]/g, '').substring(0, 254) : '';
+const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+// ========== RATE LIMITING PARA LOGIN ==========
+const loginLimiter = require('express-rate-limit')({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    message: { success: false, error: 'Demasiados intentos de inicio de sesión. Intente en 15 minutos.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => {
+        return req.ip + ':' + (req.body?.email || 'unknown');
+    }
+});
+
+const createUserLimiter = require('express-rate-limit')({
+    windowMs: 60 * 60 * 1000,
+    max: 3,
+    message: { success: false, error: 'Demasiados intentos de creación de usuario. Intente más tarde.' },
+    standardHeaders: true,
+    legacyHeaders: false
+});
+
 const API_BASE_URL = process.env.API_URL || 'https://api1.strideutmat.com';
 
 // ========== CONFIGURACIÓN DE MULTER ==========
@@ -77,13 +102,21 @@ const uploadPersonal = multer({
 
 // ========== RUTAS BÁSICAS PARA SUPER USERS ==========
 
-router.post('/create-superuser', async (req, res) => {
+router.post('/create-superuser', createUserLimiter, async (req, res) => {
     try {
-        const { username, email, password } = req.body;
-        if (!username || !email || !password) {
-            return res.status(400).json({ success: false, error: 'Todos los campos son obligatorios' });
+        const username = sanitizeStr(req.body.username);
+        const email = sanitizeEmail(req.body.email);
+        const password = req.body.password || '';
+        if (!username || username.length < 2) {
+            return res.status(400).json({ success: false, error: 'El nombre de usuario debe tener al menos 2 caracteres' });
         }
-        const hashedPassword = await bcrypt.hash(password, 10);
+        if (!email || !isValidEmail(email)) {
+            return res.status(400).json({ success: false, error: 'Correo electrónico inválido' });
+        }
+        if (!password || password.length < 8) {
+            return res.status(400).json({ success: false, error: 'La contraseña debe tener al menos 8 caracteres' });
+        }
+        const hashedPassword = await bcrypt.hash(password, 12);
         const [result] = await db.execute(
             'INSERT INTO super_users (username, email, password) VALUES (?, ?, ?)',
             [username, email, hashedPassword]
@@ -98,15 +131,17 @@ router.post('/create-superuser', async (req, res) => {
     }
 });
 
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
     try {
-        const { email, password } = req.body;
-        console.log('🔐 Intento de login para:', email);
-        if (!email || !password) {
-            return res.status(400).json({ success: false, error: 'Email y contraseña son requeridos' });
+        const email = sanitizeEmail(req.body.email);
+        const password = req.body.password || '';
+        if (!email || !isValidEmail(email)) {
+            return res.status(400).json({ success: false, error: 'Correo electrónico inválido' });
+        }
+        if (!password) {
+            return res.status(400).json({ success: false, error: 'Contraseña requerida' });
         }
         const [users] = await db.execute('SELECT * FROM super_users WHERE email = ?', [email]);
-        console.log('👤 Usuarios encontrados:', users.length);
         if (users.length === 0) {
             return res.status(401).json({ success: false, error: 'Credenciales inválidas' });
         }
@@ -120,7 +155,6 @@ router.post('/login', async (req, res) => {
             tipo: 'superadmin', created_at: user.created_at
         };
         const token = generateToken(userResponse);
-        console.log('✅ Login exitoso para:', user.email);
         res.json({ success: true, message: 'Login exitoso', user: userResponse, token });
     } catch (error) {
         console.error('Error en login:', error);
@@ -128,12 +162,15 @@ router.post('/login', async (req, res) => {
     }
 });
 
-router.post('/login-general', async (req, res) => {
+router.post('/login-general', loginLimiter, async (req, res) => {
     try {
-        const { email, password } = req.body;
-        console.log('🔐 Login general para:', email);
-        if (!email || !password) {
-            return res.status(400).json({ success: false, error: 'Email y contraseña son requeridos' });
+        const email = sanitizeEmail(req.body.email);
+        const password = req.body.password || '';
+        if (!email || !isValidEmail(email)) {
+            return res.status(400).json({ success: false, error: 'Correo electrónico inválido' });
+        }
+        if (!password) {
+            return res.status(400).json({ success: false, error: 'Contraseña requerida' });
         }
         let user = null;
         let userType = null;
@@ -1013,15 +1050,15 @@ router.get('/comunicados-recientes', async (req, res) => {
             if (!isNaN(parsed) && parsed > 0) { limit = Math.min(parsed, 100); }
         }
         console.log(`📢 Obteniendo ${limit} comunicados recientes...`);
-        const query = `
-            SELECT c.*, su.username as publicado_por_nombre
+        const [comunicados] = await db.execute(
+            `SELECT c.*, su.username as publicado_por_nombre
             FROM comunicados c
             LEFT JOIN super_users su ON c.publicado_por_id = su.id
             WHERE c.estado = 'publicado'
             ORDER BY c.fecha_publicacion DESC
-            LIMIT ${limit}
-        `;
-        const [comunicados] = await db.execute(query);
+            LIMIT ?`,
+            [limit]
+        );
         for (let c of comunicados) {
             const [archivos] = await db.execute(`SELECT * FROM comunicados_archivos WHERE comunicado_id = ?`, [c.id]);
             c.archivos = archivos.map(a => ({ ...a, url: `${API_BASE_URL}/uploads/comunicados/${a.ruta_archivo}` }));
@@ -1037,15 +1074,15 @@ router.get('/comunicados-recientes-alt', async (req, res) => {
     try {
         const limitParam = req.query.limit || 5;
         const limit = Math.min(parseInt(limitParam) || 5, 100);
-        const sql = `
-            SELECT c.*, su.username as publicado_por_nombre
+        const [comunicados] = await db.execute(
+            `SELECT c.*, su.username as publicado_por_nombre
             FROM comunicados c
             LEFT JOIN super_users su ON c.publicado_por_id = su.id
             WHERE c.estado = 'publicado'
             ORDER BY c.fecha_publicacion DESC
-            LIMIT ${db.escape(limit)}
-        `;
-        const [comunicados] = await db.query(sql);
+            LIMIT ?`,
+            [limit]
+        );
         for (let c of comunicados) {
             const [archivos] = await db.execute(`SELECT * FROM comunicados_archivos WHERE comunicado_id = ?`, [c.id]);
             c.archivos = archivos.map(a => ({ ...a, url: `${API_BASE_URL}/uploads/comunicados/${a.ruta_archivo}` }));
@@ -1846,21 +1883,26 @@ router.put('/matriz-columnas/:id/toggle', async (req, res) => {
     }
 });
 
-const CAMPOS_BLOQUEO = ['bloqueo_1er_cuatrimestre', 'bloqueo_2do_cuatrimestre', 'bloqueo_3er_cuatrimestre', 'bloqueo_filas'];
+const CAMPOS_BLOQUEO_MAP = {
+    'bloqueo_1er_cuatrimestre': 'bloqueo_1er_cuatrimestre',
+    'bloqueo_2do_cuatrimestre': 'bloqueo_2do_cuatrimestre',
+    'bloqueo_3er_cuatrimestre': 'bloqueo_3er_cuatrimestre',
+    'bloqueo_filas': 'bloqueo_filas'
+};
 
 router.put('/matriz-encabezado/toggle-bloqueo/:campo', async (req, res) => {
     try {
-        const { campo } = req.params;
-        if (!CAMPOS_BLOQUEO.includes(campo)) {
+        const campo = CAMPOS_BLOQUEO_MAP[req.params.campo];
+        if (!campo) {
             return res.status(400).json({ success: false, error: 'Campo de bloqueo inválido' });
         }
-        let [rows] = await db.execute(`SELECT id, ${campo} FROM matriz_encabezado LIMIT 1`);
+        let [rows] = await db.execute(`SELECT id, \`${campo}\` FROM matriz_encabezado LIMIT 1`);
         if (rows.length === 0) {
             const [result] = await db.execute('INSERT INTO matriz_encabezado (codigo) VALUES (\'\')');
             rows = [{ id: result.insertId, [campo]: 0 }];
         }
         const nuevoValor = rows[0][campo] ? 0 : 1;
-        await db.execute(`UPDATE matriz_encabezado SET ${campo} = ? WHERE id = ?`, [nuevoValor, rows[0].id]);
+        await db.execute(`UPDATE matriz_encabezado SET \`${campo}\` = ? WHERE id = ?`, [nuevoValor, rows[0].id]);
         const io = getIO();
         if (io) io.emit('matriz-update', { type: 'bloqueo-change', campo });
         res.json({ success: true, [campo]: !!nuevoValor, message: nuevoValor ? 'Columna bloqueada' : 'Columna desbloqueada' });
