@@ -3,7 +3,6 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 const universityRoutes = require('./routes/universityRoutes');
 const path = require('path');
@@ -101,20 +100,11 @@ app.use(cors({
     credentials: true
 }));
 
-// Seguridad: helmet y rate limiting global
+// Seguridad: helmet
 app.use(helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
     contentSecurityPolicy: false
 }));
-
-const globalLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 200,
-    message: { success: false, error: 'Demasiadas solicitudes, intente más tarde' },
-    standardHeaders: true,
-    legacyHeaders: false
-});
-app.use(globalLimiter);
 
 // Aumentar límite de payload para JSON
 app.use(express.json({ limit: '10mb' }));
