@@ -5,6 +5,8 @@ const fs = require('fs');
 const db = require('../config/database');
 const { uploadSmoa, uploadSmoaCol, uploadSmoaEditorImg, smoaEditorImgDir } = require('../middleware/upload');
 const { API_BASE_URL, TIPOS_USUARIO_VALIDOS, TIPOS_DATO_SMOA, PERMISOS_SUBIDA_SMOA } = require('../utils/constants');
+const { requireSuperAdmin } = require('../middleware/roles');
+const { sanitize, sanitizeStr } = require('../utils/sanitize');
 
 // ========== ENCABEZADO ==========
 
@@ -23,8 +25,9 @@ router.get('/smoa-encabezado', async (req, res) => {
     }
 });
 
-router.put('/smoa-encabezado', async (req, res) => {
+router.put('/smoa-encabezado', requireSuperAdmin, async (req, res) => {
     try {
+        // contenido no se sanitiza (rich text HTML)
         const { contenido, imagen, imagen_ancho, imagen_alineacion } = req.body;
         let [rows] = await db.execute('SELECT * FROM smoa_encabezado LIMIT 1');
         const oldImagen = rows[0]?.imagen;
@@ -82,7 +85,7 @@ router.get('/smoa-usuarios', async (req, res) => {
     }
 });
 
-router.post('/smoa-usuarios', async (req, res) => {
+router.post('/smoa-usuarios', requireSuperAdmin, async (req, res) => {
     try {
         const { usuario_id, usuario_tipo } = req.body;
         if (!usuario_id || !usuario_tipo) {
@@ -105,7 +108,7 @@ router.post('/smoa-usuarios', async (req, res) => {
     }
 });
 
-router.delete('/smoa-usuarios/:id', async (req, res) => {
+router.delete('/smoa-usuarios/:id', requireSuperAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const [result] = await db.execute('DELETE FROM smoa_usuarios WHERE id = ?', [id]);
@@ -131,8 +134,9 @@ router.get('/smoa-columnas', async (req, res) => {
     }
 });
 
-router.post('/smoa-columnas', async (req, res) => {
+router.post('/smoa-columnas', requireSuperAdmin, async (req, res) => {
     try {
+        sanitize(req.body, { nombre: sanitizeStr });
         const { nombre, tipo_dato, permiso_subida } = req.body;
         if (!nombre || !nombre.trim()) {
             return res.status(400).json({ success: false, error: 'El nombre es requerido' });
@@ -147,9 +151,10 @@ router.post('/smoa-columnas', async (req, res) => {
     }
 });
 
-router.put('/smoa-columnas/:id', async (req, res) => {
+router.put('/smoa-columnas/:id', requireSuperAdmin, async (req, res) => {
     try {
         const { id } = req.params;
+        sanitize(req.body, { nombre: sanitizeStr });
         const { nombre, tipo_dato, permiso_subida } = req.body;
         if (!nombre || !nombre.trim()) {
             return res.status(400).json({ success: false, error: 'El nombre es requerido' });
@@ -168,7 +173,7 @@ router.put('/smoa-columnas/:id', async (req, res) => {
     }
 });
 
-router.delete('/smoa-columnas/:id', async (req, res) => {
+router.delete('/smoa-columnas/:id', requireSuperAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const [result] = await db.execute('DELETE FROM smoa_columnas WHERE id = ?', [id]);
@@ -194,7 +199,7 @@ router.get('/smoa-filas', async (req, res) => {
     }
 });
 
-router.post('/smoa-filas', async (req, res) => {
+router.post('/smoa-filas', requireSuperAdmin, async (req, res) => {
     try {
         const { valores } = req.body;
         const [result] = await db.execute(
@@ -209,7 +214,7 @@ router.post('/smoa-filas', async (req, res) => {
     }
 });
 
-router.put('/smoa-filas/:id', async (req, res) => {
+router.put('/smoa-filas/:id', requireSuperAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const { valores } = req.body;
@@ -228,7 +233,7 @@ router.put('/smoa-filas/:id', async (req, res) => {
     }
 });
 
-router.delete('/smoa-filas/:id', async (req, res) => {
+router.delete('/smoa-filas/:id', requireSuperAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const [result] = await db.execute('DELETE FROM smoa_filas WHERE id = ?', [id]);
@@ -244,7 +249,7 @@ router.delete('/smoa-filas/:id', async (req, res) => {
 
 // ========== PPTX POR FILA ==========
 
-router.put('/smoa-filas/:id/pptx', (req, res, next) => {
+router.put('/smoa-filas/:id/pptx', requireSuperAdmin, (req, res, next) => {
     const contentType = req.headers['content-type'] || '';
     if (contentType.includes('multipart/form-data')) {
         uploadSmoa.single('pptx')(req, res, (err) => {
@@ -291,7 +296,7 @@ router.put('/smoa-filas/:id/pptx', (req, res, next) => {
 
 // ========== SUBIDA DE ARCHIVOS A COLUMNAS ==========
 
-router.post('/smoa-filas/:filaId/columna/:columnaId/subir', uploadSmoaCol.single('archivo'), async (req, res) => {
+router.post('/smoa-filas/:filaId/columna/:columnaId/subir', requireSuperAdmin, uploadSmoaCol.single('archivo'), async (req, res) => {
     try {
         const { filaId, columnaId } = req.params;
         const usuarioId = req.body.usuario_id;
@@ -322,7 +327,7 @@ router.post('/smoa-filas/:filaId/columna/:columnaId/subir', uploadSmoaCol.single
     }
 });
 
-router.delete('/smoa-filas/:filaId/columna/:columnaId/eliminar', async (req, res) => {
+router.delete('/smoa-filas/:filaId/columna/:columnaId/eliminar', requireSuperAdmin, async (req, res) => {
     try {
         const { filaId, columnaId } = req.params;
         const [filas] = await db.execute('SELECT * FROM smoa_filas WHERE id = ?', [filaId]);
@@ -348,7 +353,7 @@ router.delete('/smoa-filas/:filaId/columna/:columnaId/eliminar', async (req, res
     }
 });
 
-router.post('/smoa-upload', uploadSmoa.single('archivo'), async (req, res) => {
+router.post('/smoa-upload', requireSuperAdmin, uploadSmoa.single('archivo'), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ success: false, error: 'No se recibió ningún archivo' });
@@ -391,7 +396,7 @@ router.get('/smoa-filas/:id/permisos-pptx', async (req, res) => {
     }
 });
 
-router.put('/smoa-filas/:id/permisos-pptx', async (req, res) => {
+router.put('/smoa-filas/:id/permisos-pptx', requireSuperAdmin, async (req, res) => {
     const { id } = req.params;
     const { permisos } = req.body;
     try {
@@ -413,7 +418,7 @@ router.put('/smoa-filas/:id/permisos-pptx', async (req, res) => {
 
 // ========== SUBIDA DE IMÁGENES PARA EL EDITOR SMOA ==========
 
-router.post('/smoa-upload-image', uploadSmoaEditorImg.single('imagen'), async (req, res) => {
+router.post('/smoa-upload-image', requireSuperAdmin, uploadSmoaEditorImg.single('imagen'), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ success: false, error: 'No se recibió ninguna imagen' });

@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
+const { requireSuperAdmin } = require('../middleware/roles');
+const { sanitize } = require('../utils/sanitize');
 
 router.get('/direcciones', async (req, res) => {
     try {
@@ -12,9 +14,9 @@ router.get('/direcciones', async (req, res) => {
     }
 });
 
-router.post('/direcciones', async (req, res) => {
+router.post('/direcciones', requireSuperAdmin, async (req, res) => {
     try {
-        const { nombre } = req.body;
+        const { nombre } = sanitize(req.body, { nombre: s => s.trim().substring(0, 255) });
         if (!nombre) {
             return res.status(400).json({ success: false, error: 'El nombre es requerido' });
         }

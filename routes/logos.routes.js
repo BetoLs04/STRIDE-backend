@@ -3,8 +3,9 @@ const router = express.Router();
 const path = require('path');
 const fs = require('fs');
 const { logoDir } = require('../middleware/upload');
+const { requireSuperAdmin } = require('../middleware/roles');
 
-router.post('/upload-logo', async (req, res) => {
+router.post('/upload-logo', requireSuperAdmin, async (req, res) => {
   try {
     console.log('📤 Subiendo logo...');
     if (!req.headers['content-type'] || !req.headers['content-type'].includes('multipart/form-data')) {
@@ -43,7 +44,7 @@ router.post('/upload-logo', async (req, res) => {
   }
 });
 
-router.delete('/delete-logo', (req, res) => {
+router.delete('/delete-logo', requireSuperAdmin, (req, res) => {
   try {
     if (!fs.existsSync(logoDir)) { return res.json({ success: true, message: 'No hay logo para eliminar' }); }
     const files = fs.readdirSync(logoDir);

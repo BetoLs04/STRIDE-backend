@@ -67,6 +67,15 @@ const comunicadosStorage = multer.diskStorage({
 });
 const uploadComunicados = multer({
     storage: comunicadosStorage,
+    fileFilter: (req, file, cb) => {
+        const ext = path.extname(file.originalname).toLowerCase();
+        const allowed = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.pptx', '.zip'];
+        if (allowed.includes(ext)) {
+            cb(null, true);
+        } else {
+            cb(new Error('Tipo de archivo no permitido en comunicados'), false);
+        }
+    },
     limits: { fileSize: 10 * 1024 * 1024, files: 5 }
 });
 
@@ -79,6 +88,15 @@ const tareasStorage = multer.diskStorage({
 });
 const uploadTareas = multer({
     storage: tareasStorage,
+    fileFilter: (req, file, cb) => {
+        const ext = path.extname(file.originalname).toLowerCase();
+        const allowed = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.pptx', '.zip'];
+        if (allowed.includes(ext)) {
+            cb(null, true);
+        } else {
+            cb(new Error('Tipo de archivo no permitido en tareas'), false);
+        }
+    },
     limits: { fileSize: 10 * 1024 * 1024, files: 5 }
 });
 
@@ -112,6 +130,15 @@ const smoaColStorage = multer.diskStorage({
 });
 const uploadSmoaCol = multer({
     storage: smoaColStorage,
+    fileFilter: (req, file, cb) => {
+        const ext = path.extname(file.originalname).toLowerCase();
+        const allowed = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.pptx'];
+        if (allowed.includes(ext)) {
+            cb(null, true);
+        } else {
+            cb(new Error('Tipo de archivo no permitido en columna SMOA'), false);
+        }
+    },
     limits: { fileSize: 50 * 1024 * 1024 }
 });
 

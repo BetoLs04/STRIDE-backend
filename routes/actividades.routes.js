@@ -4,9 +4,12 @@ const path = require('path');
 const fs = require('fs');
 const db = require('../config/database');
 const { uploadActividades, uploadDir } = require('../middleware/upload');
+const { requireRole } = require('../middleware/roles');
+const { sanitize, sanitizeStr } = require('../utils/sanitize');
 
-router.post('/actividades', uploadActividades.array('imagenes', 5), async (req, res) => {
+router.post('/actividades', requireRole('superadmin', 'directivo'), uploadActividades.array('imagenes', 5), async (req, res) => {
     try {
+        sanitize(req.body, { titulo: sanitizeStr, descripcion: sanitizeStr, tipo_actividad: sanitizeStr });
         const { titulo, descripcion, tipo_actividad, fecha_inicio, fecha_fin, direccion_id, creado_por_id, creado_por_tipo } = req.body;
         console.log('📝 Datos recibidos:', { titulo, descripcion, tipo_actividad, fecha_inicio, fecha_fin, direccion_id, creado_por_id, creado_por_tipo });
         console.log('📸 Archivos recibidos:', req.files ? req.files.length : 0);
@@ -45,7 +48,7 @@ router.post('/actividades', uploadActividades.array('imagenes', 5), async (req, 
     }
 });
 
-router.put('/actividades/:id/estado', async (req, res) => {
+router.put('/actividades/:id/estado', requireRole('superadmin', 'directivo'), async (req, res) => {
     try {
         const { id } = req.params;
         const { estado } = req.body;
@@ -64,9 +67,10 @@ router.put('/actividades/:id/estado', async (req, res) => {
     }
 });
 
-router.put('/actividades/:id', uploadActividades.array('imagenes', 5), async (req, res) => {
+router.put('/actividades/:id', requireRole('superadmin', 'directivo'), uploadActividades.array('imagenes', 5), async (req, res) => {
     try {
         const { id } = req.params;
+        sanitize(req.body, { titulo: sanitizeStr, descripcion: sanitizeStr, tipo_actividad: sanitizeStr });
         const { titulo, descripcion, tipo_actividad, fecha_inicio, fecha_fin, creado_por_id } = req.body;
         console.log('✏️ Editando actividad ID:', id);
         if (!titulo || !tipo_actividad || !fecha_inicio) {
@@ -132,7 +136,7 @@ router.put('/actividades/:id', uploadActividades.array('imagenes', 5), async (re
     }
 });
 
-router.delete('/actividades/imagen/:imagenId', async (req, res) => {
+router.delete('/actividades/imagen/:imagenId', requireRole('superadmin', 'directivo'), async (req, res) => {
     try {
         const { imagenId } = req.params;
         const { creado_por_id } = req.body;
@@ -228,7 +232,7 @@ router.get('/actividades/todas', async (req, res) => {
     }
 });
 
-router.delete('/actividades/:id', async (req, res) => {
+router.delete('/actividades/:id', requireRole('superadmin', 'directivo'), async (req, res) => {
     try {
         const { id } = req.params;
         console.log(`🗑️ Solicitando eliminación de actividad ID: ${id}`);

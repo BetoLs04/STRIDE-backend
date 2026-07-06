@@ -5,9 +5,12 @@ const fs = require('fs');
 const db = require('../config/database');
 const { uploadComunicados, comunicadosDir } = require('../middleware/upload');
 const { API_BASE_URL } = require('../utils/constants');
+const { requireSuperAdmin } = require('../middleware/roles');
+const { sanitize, sanitizeStr } = require('../utils/sanitize');
 
-router.post('/comunicados', uploadComunicados.array('archivos', 5), async (req, res) => {
+router.post('/comunicados', requireSuperAdmin, uploadComunicados.array('archivos', 5), async (req, res) => {
     try {
+        sanitize(req.body, { titulo: sanitizeStr, link_externo: v => typeof v === 'string' ? v.trim().substring(0, 500) : '' });
         const { titulo, contenido, link_externo, publicado_por_id } = req.body;
         console.log('📝 Creando comunicado:', { titulo, publicado_por_id });
         if (!titulo || !contenido || !publicado_por_id) {
@@ -53,7 +56,7 @@ router.get('/comunicados', async (req, res) => {
     }
 });
 
-router.get('/comunicados-admin', async (req, res) => {
+router.get('/comunicados-admin', requireSuperAdmin, async (req, res) => {
     try {
         const [comunicados] = await db.execute(`
             SELECT c.*, su.username as publicado_por_nombre
@@ -94,9 +97,10 @@ router.get('/comunicados/:id', async (req, res) => {
     }
 });
 
-router.put('/comunicados/:id', uploadComunicados.array('archivos', 5), async (req, res) => {
+router.put('/comunicados/:id', requireSuperAdmin, uploadComunicados.array('archivos', 5), async (req, res) => {
     try {
         const { id } = req.params;
+        sanitize(req.body, { titulo: sanitizeStr, link_externo: v => typeof v === 'string' ? v.trim().substring(0, 500) : '' });
         const { titulo, contenido, link_externo, estado } = req.body;
         const [result] = await db.execute(
             `UPDATE comunicados SET titulo = ?, contenido = ?, link_externo = ?, estado = ? WHERE id = ?`,
@@ -118,7 +122,7 @@ router.put('/comunicados/:id', uploadComunicados.array('archivos', 5), async (re
     }
 });
 
-router.delete('/comunicados/:id', async (req, res) => {
+router.delete('/comunicados/:id', requireSuperAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const [archivos] = await db.execute(`SELECT * FROM comunicados_archivos WHERE comunicado_id = ?`, [id]);
@@ -135,7 +139,7 @@ router.delete('/comunicados/:id', async (req, res) => {
     }
 });
 
-router.delete('/comunicados/:id/archivo/:archivoId', async (req, res) => {
+router.delete('/comunicados/:id/archivo/:archivoId', requireSuperAdmin, async (req, res) => {
     try {
         const { id, archivoId } = req.params;
         const [archivos] = await db.execute(`SELECT * FROM comunicados_archivos WHERE id = ? AND comunicado_id = ?`, [archivoId, id]);

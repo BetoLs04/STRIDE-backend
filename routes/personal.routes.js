@@ -5,6 +5,8 @@ const path = require('path');
 const fs = require('fs');
 const db = require('../config/database');
 const { uploadPersonal } = require('../middleware/upload');
+const { requireSuperAdmin } = require('../middleware/roles');
+const { sanitize, sanitizeStr, sanitizeEmail } = require('../utils/sanitize');
 
 router.get('/personal', async (req, res) => {
     try {
@@ -45,20 +47,21 @@ router.get('/personal/:id', async (req, res) => {
     }
 });
 
-router.post('/personal', uploadPersonal.single('foto'), async (req, res) => {
+router.post('/personal', requireSuperAdmin, uploadPersonal.single('foto'), async (req, res) => {
     try {
         console.log('📝 Cuerpo recibido:', req.body);
         console.log('📸 Archivo recibido:', req.file);
         if (!req.body || Object.keys(req.body).length === 0) {
             return res.status(400).json({ success: false, error: 'Los datos deben enviarse como JSON o form-urlencoded' });
         }
+        sanitize(req.body, { nombre_completo: sanitizeStr, puesto: sanitizeStr, email: sanitizeEmail });
         const { nombre_completo, puesto, direccion_id, email, password } = req.body;
         const foto = req.file;
         if (!nombre_completo || !puesto || !direccion_id || !email || !password) {
             if (foto) { try { fs.unlinkSync(foto.path); } catch (err) {} }
             return res.status(400).json({ success: false, error: 'Todos los campos son requeridos', campos_recibidos: { nombre_completo, puesto, direccion_id, email } });
         }
-        const hashedPassword = await bcrypt.hash(password, 10);
+        const hashedPassword = await bcrypt.hash(password, 12);
         const [result] = await db.execute(
             'INSERT INTO personal (nombre_completo, puesto, direccion_id, email, password, foto_perfil) VALUES (?, ?, ?, ?, ?, ?)',
             [nombre_completo, puesto, direccion_id, email, hashedPassword, foto ? foto.filename : null]
@@ -74,9 +77,10 @@ router.post('/personal', uploadPersonal.single('foto'), async (req, res) => {
     }
 });
 
-router.put('/personal/:id', uploadPersonal.single('foto'), async (req, res) => {
+router.put('/personal/:id', requireSuperAdmin, uploadPersonal.single('foto'), async (req, res) => {
     try {
         const { id } = req.params;
+        sanitize(req.body, { nombre_completo: sanitizeStr, puesto: sanitizeStr, email: sanitizeEmail });
         const { nombre_completo, puesto, direccion_id, email, password } = req.body;
         if (!nombre_completo || !puesto || !direccion_id || !email) {
             if (req.file) fs.unlinkSync(req.file.path);
@@ -98,7 +102,7 @@ router.put('/personal/:id', uploadPersonal.single('foto'), async (req, res) => {
         }
         let updateQuery, updateParams;
         if (password && password.trim() !== '') {
-            const hashedPassword = await bcrypt.hash(password, 10);
+            const hashedPassword = await bcrypt.hash(password, 12);
             updateQuery = `UPDATE personal SET nombre_completo = ?, puesto = ?, direccion_id = ?, email = ?, password = ?, foto_perfil = ? WHERE id = ?`;
             updateParams = [nombre_completo, puesto, direccion_id, email, hashedPassword, nuevaFoto, id];
         } else {
@@ -115,7 +119,7 @@ router.put('/personal/:id', uploadPersonal.single('foto'), async (req, res) => {
     }
 });
 
-router.delete('/personal/:id', async (req, res) => {
+router.delete('/personal/:id', requireSuperAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const [personalList] = await db.execute('SELECT * FROM personal WHERE id = ?', [id]);

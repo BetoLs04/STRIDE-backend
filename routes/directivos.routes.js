@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const db = require('../config/database');
+const { requireSuperAdmin } = require('../middleware/roles');
+const { sanitize, sanitizeStr, sanitizeEmail, isValidEmail } = require('../utils/sanitize');
 
 router.get('/directivos', async (req, res) => {
     try {
@@ -15,13 +17,14 @@ router.get('/directivos', async (req, res) => {
     }
 });
 
-router.post('/directivos', async (req, res) => {
+router.post('/directivos', requireSuperAdmin, async (req, res) => {
     try {
+        sanitize(req.body, { nombre_completo: sanitizeStr, cargo: sanitizeStr, email: sanitizeEmail });
         const { nombre_completo, cargo, direccion_id, email, password } = req.body;
         if (!nombre_completo || !cargo || !direccion_id || !email || !password) {
             return res.status(400).json({ success: false, error: 'Todos los campos son requeridos' });
         }
-        const hashedPassword = await bcrypt.hash(password, 10);
+        const hashedPassword = await bcrypt.hash(password, 12);
         const [result] = await db.execute(
             'INSERT INTO directivos (nombre_completo, cargo, direccion_id, email, password) VALUES (?, ?, ?, ?, ?)',
             [nombre_completo, cargo, direccion_id, email, hashedPassword]
@@ -36,16 +39,17 @@ router.post('/directivos', async (req, res) => {
     }
 });
 
-router.put('/directivos/:id', async (req, res) => {
+router.put('/directivos/:id', requireSuperAdmin, async (req, res) => {
     try {
         const { id } = req.params;
+        sanitize(req.body, { nombre_completo: sanitizeStr, cargo: sanitizeStr, email: sanitizeEmail });
         const { nombre_completo, cargo, direccion_id, email, password } = req.body;
         if (!nombre_completo || !cargo || !direccion_id || !email) {
             return res.status(400).json({ success: false, error: 'Nombre, cargo, dirección y email son requeridos' });
         }
         let updateQuery, updateParams;
         if (password && password.trim() !== '') {
-            const hashedPassword = await bcrypt.hash(password, 10);
+            const hashedPassword = await bcrypt.hash(password, 12);
             updateQuery = `UPDATE directivos SET nombre_completo = ?, cargo = ?, direccion_id = ?, email = ?, password = ? WHERE id = ?`;
             updateParams = [nombre_completo, cargo, direccion_id, email, hashedPassword, id];
         } else {
@@ -62,7 +66,7 @@ router.put('/directivos/:id', async (req, res) => {
     }
 });
 
-router.delete('/directivos/:id', async (req, res) => {
+router.delete('/directivos/:id', requireSuperAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const [directivos] = await db.execute('SELECT * FROM directivos WHERE id = ?', [id]);

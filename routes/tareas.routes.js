@@ -4,6 +4,8 @@ const path = require('path');
 const fs = require('fs');
 const db = require('../config/database');
 const { uploadTareas } = require('../middleware/upload');
+const { requireSuperAdmin } = require('../middleware/roles');
+const { sanitize, sanitizeStr } = require('../utils/sanitize');
 
 router.get('/tareas/usuarios-disponibles', async (req, res) => {
     try {
@@ -20,10 +22,11 @@ router.get('/tareas/usuarios-disponibles', async (req, res) => {
     }
 });
 
-router.post('/tareas', uploadTareas.array('archivos', 5), async (req, res) => {
+router.post('/tareas', requireSuperAdmin, uploadTareas.array('archivos', 5), async (req, res) => {
     const connection = await db.getConnection();
     try {
         await connection.beginTransaction();
+        sanitize(req.body, { titulo: sanitizeStr, descripcion: sanitizeStr });
         const { titulo, descripcion, fecha_entrega, asignaciones } = req.body;
         const creado_por_id = req.body.creado_por_id;
         const creado_por_tipo = req.body.creado_por_tipo || 'superadmin';
@@ -175,6 +178,7 @@ router.post('/tareas/completar/:asignacionId', uploadTareas.array('archivos', 5)
   try {
     await connection.beginTransaction();
     const { asignacionId } = req.params;
+    sanitize(req.body, { comentarios: sanitizeStr });
     const { comentarios } = req.body;
     if (!comentarios?.trim() && (!req.files || req.files.length === 0)) {
       await connection.rollback(); connection.release();
@@ -219,7 +223,7 @@ router.post('/tareas/completar/:asignacionId', uploadTareas.array('archivos', 5)
   }
 });
 
-router.put('/tareas/asignacion/:id', async (req, res) => {
+router.put('/tareas/asignacion/:id', requireSuperAdmin, async (req, res) => {
     const connection = await db.getConnection();
     try {
         await connection.beginTransaction();
@@ -316,11 +320,12 @@ router.get('/tareas/:id', async (req, res) => {
     }
 });
 
-router.put('/tareas/:id', uploadTareas.array('archivos', 5), async (req, res) => {
+router.put('/tareas/:id', requireSuperAdmin, uploadTareas.array('archivos', 5), async (req, res) => {
   const connection = await db.getConnection();
   try {
     await connection.beginTransaction();
     const { id } = req.params;
+    sanitize(req.body, { titulo: sanitizeStr, descripcion: sanitizeStr });
     const { titulo, descripcion, fecha_entrega, asignaciones } = req.body;
     await connection.execute(
       `UPDATE tareas SET titulo = ?, descripcion = ?, fecha_entrega = ? WHERE id = ?`,
@@ -353,7 +358,7 @@ router.put('/tareas/:id', uploadTareas.array('archivos', 5), async (req, res) =>
   }
 });
 
-router.delete('/tareas/:id', async (req, res) => {
+router.delete('/tareas/:id', requireSuperAdmin, async (req, res) => {
     const connection = await db.getConnection();
     try {
         await connection.beginTransaction();

@@ -3,6 +3,10 @@ const router = express.Router();
 const db = require('../config/database');
 const { getIO } = require('../config/socket');
 const { CAMPOS_BLOQUEO_MAP, TIPOS_USUARIO_VALIDOS, ALINEACIONES_VALIDAS } = require('../utils/constants');
+const { requireSuperAdmin } = require('../middleware/roles');
+const { sanitize, sanitizeStr } = require('../utils/sanitize');
+
+router.use(requireSuperAdmin);
 
 // ========== USUARIOS DISPONIBLES ==========
 
@@ -54,6 +58,7 @@ router.get('/matriz-secciones', async (req, res) => {
 
 router.post('/matriz-secciones', async (req, res) => {
     try {
+        sanitize(req.body, { nombre: sanitizeStr });
         const { nombre } = req.body;
         if (!nombre || !nombre.trim()) {
             return res.status(400).json({ success: false, error: 'El nombre es requerido' });
@@ -69,6 +74,7 @@ router.post('/matriz-secciones', async (req, res) => {
 router.put('/matriz-secciones/:id', async (req, res) => {
     try {
         const { id } = req.params;
+        sanitize(req.body, { nombre: sanitizeStr });
         const { nombre } = req.body;
         if (!nombre || !nombre.trim()) {
             return res.status(400).json({ success: false, error: 'El nombre es requerido' });
@@ -169,6 +175,7 @@ router.get('/matriz-encabezado', async (req, res) => {
 
 router.put('/matriz-encabezado', async (req, res) => {
     try {
+        sanitize(req.body, { codigo: sanitizeStr, revision: sanitizeStr, fecha_actualizacion: sanitizeStr, fecha_revision_indicadores: sanitizeStr, responsable: sanitizeStr, anio: sanitizeStr });
         const { codigo, revision, fecha_actualizacion, fecha_revision_indicadores, responsable, anio } = req.body;
         let [rows] = await db.execute('SELECT id FROM matriz_encabezado LIMIT 1');
         if (rows.length === 0) {
@@ -204,6 +211,7 @@ router.get('/matriz-columnas', async (req, res) => {
 
 router.post('/matriz-columnas', async (req, res) => {
     try {
+        sanitize(req.body, { nombre: sanitizeStr });
         const { nombre } = req.body;
         if (!nombre || !nombre.trim()) {
             return res.status(400).json({ success: false, error: 'El nombre es requerido' });
@@ -219,6 +227,7 @@ router.post('/matriz-columnas', async (req, res) => {
 router.put('/matriz-columnas/:id', async (req, res) => {
     try {
         const { id } = req.params;
+        sanitize(req.body, { nombre: sanitizeStr });
         const { nombre, alineacion } = req.body;
         if (!nombre || !nombre.trim()) {
             return res.status(400).json({ success: false, error: 'El nombre es requerido' });

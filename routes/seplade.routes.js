@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
 const { TIPOS_USUARIO_VALIDOS } = require('../utils/constants');
+const { requireSuperAdmin } = require('../middleware/roles');
+const { sanitize, sanitizeStr } = require('../utils/sanitize');
 
 // ========== HOJAS ==========
 
@@ -15,8 +17,9 @@ router.get('/seplade-hojas', async (req, res) => {
     }
 });
 
-router.post('/seplade-hojas', async (req, res) => {
+router.post('/seplade-hojas', requireSuperAdmin, async (req, res) => {
     try {
+        sanitize(req.body, { titulo: sanitizeStr, subtitulo: sanitizeStr, nombre: sanitizeStr });
         const { titulo, subtitulo, nombre } = req.body;
         const [result] = await db.execute(
             'INSERT INTO seplade_hojas (titulo, subtitulo, nombre) VALUES (?, ?, ?)',
@@ -30,8 +33,9 @@ router.post('/seplade-hojas', async (req, res) => {
     }
 });
 
-router.put('/seplade-hojas/:id', async (req, res) => {
+router.put('/seplade-hojas/:id', requireSuperAdmin, async (req, res) => {
     try {
+        sanitize(req.body, { titulo: sanitizeStr, subtitulo: sanitizeStr, nombre: sanitizeStr });
         const { titulo, subtitulo, nombre } = req.body;
         await db.execute(
             'UPDATE seplade_hojas SET titulo = ?, subtitulo = ?, nombre = ? WHERE id = ?',
@@ -45,7 +49,7 @@ router.put('/seplade-hojas/:id', async (req, res) => {
     }
 });
 
-router.delete('/seplade-hojas/:id', async (req, res) => {
+router.delete('/seplade-hojas/:id', requireSuperAdmin, async (req, res) => {
     try {
         await db.execute('DELETE FROM seplade_hojas WHERE id = ?', [req.params.id]);
         res.json({ success: true, message: 'Hoja eliminada' });
@@ -104,7 +108,7 @@ router.get('/seplade-hojas/:id', async (req, res) => {
 
 // ========== INDICADORES ==========
 
-router.post('/seplade-indicadores', async (req, res) => {
+router.post('/seplade-indicadores', requireSuperAdmin, async (req, res) => {
     try {
         const { hoja_id } = req.body;
         if (!hoja_id) {
@@ -133,9 +137,10 @@ router.post('/seplade-indicadores', async (req, res) => {
     }
 });
 
-router.put('/seplade-indicadores/:id', async (req, res) => {
+router.put('/seplade-indicadores/:id', requireSuperAdmin, async (req, res) => {
     try {
         const allowed = ['nombre', 'nivel', 'unidad_medida', 'meta_anual', 'encargado', 'evidencia_fisica', 'evidencia_online'];
+        sanitize(req.body, { nombre: sanitizeStr, nivel: sanitizeStr, unidad_medida: sanitizeStr, encargado: sanitizeStr, evidencia_fisica: sanitizeStr, evidencia_online: sanitizeStr });
         const sets = [];
         const values = [];
         for (const field of allowed) {
@@ -160,7 +165,7 @@ router.put('/seplade-indicadores/:id', async (req, res) => {
     }
 });
 
-router.delete('/seplade-indicadores/:id', async (req, res) => {
+router.delete('/seplade-indicadores/:id', requireSuperAdmin, async (req, res) => {
     try {
         await db.execute('DELETE FROM seplade_indicadores WHERE id = ?', [req.params.id]);
         res.json({ success: true, message: 'Indicador eliminado' });
@@ -187,7 +192,7 @@ router.get('/seplade-notas/:indicador_id/:mes', async (req, res) => {
 
 router.put('/seplade-notas/:indicador_id/:mes', async (req, res) => {
     try {
-        const { nota } = req.body;
+        const { nota } = sanitize(req.body, { nota: sanitizeStr });
         await db.execute(
             `INSERT INTO seplade_notas (indicador_id, mes, nota) VALUES (?, ?, ?)
              ON DUPLICATE KEY UPDATE nota = VALUES(nota)`,
@@ -226,7 +231,7 @@ router.put('/seplade-valores/:indicador_id', async (req, res) => {
 
 // ========== ASIGNACIÓN DE USUARIOS ==========
 
-router.get('/seplade-usuarios', async (req, res) => {
+router.get('/seplade-usuarios', requireSuperAdmin, async (req, res) => {
     try {
         const [directivos] = await db.execute('SELECT id, nombre_completo as nombre, direccion_id FROM directivos ORDER BY nombre_completo');
         const [personal] = await db.execute('SELECT id, nombre_completo as nombre, direccion_id FROM personal ORDER BY nombre_completo');
@@ -239,7 +244,7 @@ router.get('/seplade-usuarios', async (req, res) => {
     }
 });
 
-router.post('/seplade-indicadores/:id/usuarios', async (req, res) => {
+router.post('/seplade-indicadores/:id/usuarios', requireSuperAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const { usuario_id, usuario_tipo } = req.body;
@@ -267,7 +272,7 @@ router.post('/seplade-indicadores/:id/usuarios', async (req, res) => {
     }
 });
 
-router.delete('/seplade-indicadores/:id/usuarios/:usuarioId/:usuarioTipo', async (req, res) => {
+router.delete('/seplade-indicadores/:id/usuarios/:usuarioId/:usuarioTipo', requireSuperAdmin, async (req, res) => {
     try {
         const { id, usuarioId, usuarioTipo } = req.params;
         if (!TIPOS_USUARIO_VALIDOS.includes(usuarioTipo)) {
