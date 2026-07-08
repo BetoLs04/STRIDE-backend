@@ -1,0 +1,372 @@
+const express = require('express');
+const router = express.Router();
+const db = require('../config/database');
+const { emit } = require('../services/socketEmitter');
+const { TIPOS_USUARIO_VALIDOS, ALINEACIONES_VALIDAS } = require('../utils/constants');
+const { requireSuperAdmin } = require('../middleware/roles');
+const { sanitize, sanitizeStr } = require('../utils/sanitize');
+
+router.use(requireSuperAdmin);
+
+// ========== USUARIOS DISPONIBLES ==========
+
+router.get('/poa-usuarios', async (req, res) => {
+    try {
+        const [directivos] = await db.execute('SELECT id, nombre_completo as nombre, direccion_id FROM directivos ORDER BY nombre_completo');
+        const [personal] = await db.execute('SELECT id, nombre_completo as nombre, direccion_id FROM personal ORDER BY nombre_completo');
+        const directivosConTipo = directivos.map(d => ({ ...d, tipo: 'directivo' }));
+        const personalConTipo = personal.map(p => ({ ...p, tipo: 'personal' }));
+        res.json({ success: true, data: [...directivosConTipo, ...personalConTipo] });
+    } catch (error) {
+        console.error('Error al obtener usuarios:', error);
+        res.status(500).json({ success: false, error: 'Error al obtener usuarios' });
+    }
+});
+
+// ========== SECCIONES ==========
+
+router.get('/poa-secciones', async (req, res) => {
+    try {
+        const [secciones] = await db.execute(`
+            SELECT ps.*,
+                   COUNT(psu.id) AS total_usuarios
+            FROM poa_secciones ps
+            LEFT JOIN poa_seccion_usuarios psu ON ps.id = psu.seccion_id
+            GROUP BY ps.id
+            ORDER BY ps.nombre
+        `);
+        for (let seccion of secciones) {
+            const [usuarios] = await db.execute(`
+                SELECT psu.id as asignacion_id, psu.usuario_id, psu.usuario_tipo,
+                       CASE WHEN psu.usuario_tipo = 'directivo' THEN d.nombre_completo
+                            WHEN psu.usuario_tipo = 'personal' THEN p.nombre_completo
+                       END as nombre
+                FROM poa_seccion_usuarios psu
+                LEFT JOIN directivos d ON psu.usuario_id = d.id AND psu.usuario_tipo = 'directivo'
+                LEFT JOIN personal p ON psu.usuario_id = p.id AND psu.usuario_tipo = 'personal'
+                WHERE psu.seccion_id = ?
+                ORDER BY nombre
+            `, [seccion.id]);
+            seccion.usuarios = usuarios;
+        }
+        res.json({ success: true, data: secciones });
+    } catch (error) {
+        console.error('Error al obtener secciones:', error);
+        res.status(500).json({ success: false, error: 'Error al obtener secciones' });
+    }
+});
+
+router.post('/poa-secciones', async (req, res) => {
+    try {
+        sanitize(req.body, { nombre: sanitizeStr });
+        const { nombre } = req.body;
+        if (!nombre || !nombre.trim()) {
+            return res.status(400).json({ success: false, error: 'El nombre es requerido' });
+        }
+        const [result] = await db.execute('INSERT INTO poa_secciones (nombre) VALUES (?)', [nombre.trim()]);
+        res.status(201).json({ success: true, message: 'Sección creada', seccionId: result.insertId });
+        emit('poa:updated', { type: 'seccion:created', id: result.insertId });
+    } catch (error) {
+        console.error('Error al crear sección:', error);
+        res.status(500).json({ success: false, error: 'Error al crear la sección' });
+    }
+});
+
+router.put('/poa-secciones/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        sanitize(req.body, { nombre: sanitizeStr });
+        const { nombre } = req.body;
+        if (!nombre || !nombre.trim()) {
+            return res.status(400).json({ success: false, error: 'El nombre es requerido' });
+        }
+        const [result] = await db.execute('UPDATE poa_secciones SET nombre = ? WHERE id = ?', [nombre.trim(), id]);
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, error: 'Sección no encontrada' });
+        }
+        res.json({ success: true, message: 'Sección actualizada' });
+        emit('poa:updated', { type: 'seccion:updated', id: parseInt(req.params.id) });
+    } catch (error) {
+        console.error('Error al actualizar sección:', error);
+        res.status(500).json({ success: false, error: 'Error al actualizar la sección' });
+    }
+});
+
+router.delete('/poa-secciones/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const [result] = await db.execute('DELETE FROM poa_secciones WHERE id = ?', [id]);
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, error: 'Sección no encontrada' });
+        }
+        res.json({ success: true, message: 'Sección eliminada' });
+        emit('poa:updated', { type: 'seccion:deleted', id: parseInt(req.params.id) });
+    } catch (error) {
+        console.error('Error al eliminar sección:', error);
+        res.status(500).json({ success: false, error: 'Error al eliminar la sección' });
+    }
+});
+
+// ========== ASIGNACIÓN DE USUARIOS ==========
+
+router.post('/poa-secciones/:id/usuarios', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { usuario_id, usuario_tipo } = req.body;
+        if (!usuario_id || !usuario_tipo) {
+            return res.status(400).json({ success: false, error: 'El usuario y tipo son requeridos' });
+        }
+        if (!TIPOS_USUARIO_VALIDOS.includes(usuario_tipo)) {
+            return res.status(400).json({ success: false, error: 'Tipo de usuario inválido' });
+        }
+        const [existe] = await db.execute('SELECT id FROM poa_secciones WHERE id = ?', [id]);
+        if (existe.length === 0) {
+            return res.status(404).json({ success: false, error: 'Sección no encontrada' });
+        }
+        await db.execute(
+            'INSERT INTO poa_seccion_usuarios (seccion_id, usuario_id, usuario_tipo) VALUES (?, ?, ?)',
+            [id, usuario_id, usuario_tipo]
+        );
+        res.status(201).json({ success: true, message: 'Usuario asignado a la sección' });
+        emit('poa:updated', { type: 'usuario:asignado', seccionId: parseInt(req.params.id) });
+    } catch (error) {
+        if (error.code === 'ER_DUP_ENTRY') {
+            return res.status(400).json({ success: false, error: 'El usuario ya está asignado a esta sección' });
+        }
+        console.error('Error al asignar usuario:', error);
+        res.status(500).json({ success: false, error: 'Error al asignar el usuario' });
+    }
+});
+
+router.delete('/poa-secciones/:id/usuarios/:usuarioId/:usuarioTipo', async (req, res) => {
+    try {
+        const { id, usuarioId, usuarioTipo } = req.params;
+        if (!TIPOS_USUARIO_VALIDOS.includes(usuarioTipo)) {
+            return res.status(400).json({ success: false, error: 'Tipo de usuario inválido' });
+        }
+        const [result] = await db.execute(
+            'DELETE FROM poa_seccion_usuarios WHERE seccion_id = ? AND usuario_id = ? AND usuario_tipo = ?',
+            [id, usuarioId, usuarioTipo]
+        );
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, error: 'Asignación no encontrada' });
+        }
+        res.json({ success: true, message: 'Usuario quitado de la sección' });
+        emit('poa:updated', { type: 'usuario:quitado', seccionId: parseInt(req.params.id) });
+    } catch (error) {
+        console.error('Error al quitar usuario:', error);
+        res.status(500).json({ success: false, error: 'Error al quitar el usuario' });
+    }
+});
+
+// ========== ENCABEZADO ==========
+
+router.get('/poa-encabezado', async (req, res) => {
+    try {
+        let [rows] = await db.execute('SELECT * FROM poa_encabezado LIMIT 1');
+        if (rows.length === 0) {
+            const [result] = await db.execute(
+                "INSERT INTO poa_encabezado (direccion, anio, cuatrimestre) VALUES ('', '', '')"
+            );
+            const [newRows] = await db.execute('SELECT * FROM poa_encabezado WHERE id = ?', [result.insertId]);
+            rows = newRows;
+        }
+        res.json({ success: true, data: rows[0] });
+    } catch (error) {
+        console.error('Error al obtener encabezado:', error);
+        res.status(500).json({ success: false, error: 'Error al obtener encabezado' });
+    }
+});
+
+router.put('/poa-encabezado', async (req, res) => {
+    try {
+        sanitize(req.body, { direccion: sanitizeStr, anio: sanitizeStr, cuatrimestre: sanitizeStr });
+        const { direccion, anio, cuatrimestre } = req.body;
+        let [rows] = await db.execute('SELECT id FROM poa_encabezado LIMIT 1');
+        if (rows.length === 0) {
+            const [result] = await db.execute(
+                'INSERT INTO poa_encabezado (direccion, anio, cuatrimestre) VALUES (?, ?, ?)',
+                [direccion || '', anio || '', cuatrimestre || '']
+            );
+        } else {
+            await db.execute(
+                'UPDATE poa_encabezado SET direccion = ?, anio = ?, cuatrimestre = ? WHERE id = ?',
+                [direccion || '', anio || '', cuatrimestre || '', rows[0].id]
+            );
+        }
+        const [updated] = await db.execute('SELECT * FROM poa_encabezado LIMIT 1');
+        res.json({ success: true, data: updated[0], message: 'Encabezado guardado' });
+        emit('poa:updated', { type: 'encabezado:updated' });
+    } catch (error) {
+        console.error('Error al guardar encabezado:', error);
+        res.status(500).json({ success: false, error: 'Error al guardar encabezado' });
+    }
+});
+
+// ========== COLUMNAS ==========
+
+router.get('/poa-columnas', async (req, res) => {
+    try {
+        const [columnas] = await db.execute('SELECT * FROM poa_columnas ORDER BY orden ASC, id ASC');
+        res.json({ success: true, data: columnas });
+    } catch (error) {
+        console.error('Error al obtener columnas:', error);
+        res.status(500).json({ success: false, error: 'Error al obtener columnas' });
+    }
+});
+
+router.post('/poa-columnas', async (req, res) => {
+    try {
+        sanitize(req.body, { nombre: sanitizeStr });
+        const { nombre } = req.body;
+        if (!nombre || !nombre.trim()) {
+            return res.status(400).json({ success: false, error: 'El nombre es requerido' });
+        }
+        const [result] = await db.execute('INSERT INTO poa_columnas (nombre) VALUES (?)', [nombre.trim()]);
+        res.status(201).json({ success: true, message: 'Columna creada', columnaId: result.insertId });
+        emit('poa:updated', { type: 'columna:created', id: result.insertId });
+    } catch (error) {
+        console.error('Error al crear columna:', error);
+        res.status(500).json({ success: false, error: 'Error al crear la columna' });
+    }
+});
+
+router.put('/poa-columnas/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        sanitize(req.body, { nombre: sanitizeStr });
+        const { nombre, alineacion } = req.body;
+        if (!nombre || !nombre.trim()) {
+            return res.status(400).json({ success: false, error: 'El nombre es requerido' });
+        }
+        const alineacionVal = ALINEACIONES_VALIDAS.includes(alineacion) ? alineacion : 'center';
+        const [result] = await db.execute('UPDATE poa_columnas SET nombre = ?, alineacion = ? WHERE id = ?', [nombre.trim(), alineacionVal, id]);
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, error: 'Columna no encontrada' });
+        }
+        const [updated] = await db.execute('SELECT * FROM poa_columnas WHERE id = ?', [id]);
+        res.json({ success: true, data: updated[0], message: 'Columna actualizada' });
+        emit('poa:updated', { type: 'columna:updated', id: parseInt(req.params.id) });
+    } catch (error) {
+        console.error('Error al actualizar columna:', error);
+        res.status(500).json({ success: false, error: 'Error al actualizar la columna' });
+    }
+});
+
+router.put('/poa-columnas/:id/alineacion', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { alineacion } = req.body;
+        if (!ALINEACIONES_VALIDAS.includes(alineacion)) {
+            return res.status(400).json({ success: false, error: 'Alineación inválida' });
+        }
+        await db.execute('UPDATE poa_columnas SET alineacion = ? WHERE id = ?', [alineacion, id]);
+        const [updated] = await db.execute('SELECT * FROM poa_columnas WHERE id = ?', [id]);
+        res.json({ success: true, data: updated[0], message: 'Alineación actualizada' });
+        emit('poa:updated', { type: 'columna:alineacion', id: parseInt(req.params.id) });
+    } catch (error) {
+        console.error('Error al actualizar alineación:', error);
+        res.status(500).json({ success: false, error: 'Error al actualizar alineación' });
+    }
+});
+
+router.put('/poa-columnas/:id/toggle', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const [columna] = await db.execute('SELECT bloqueada FROM poa_columnas WHERE id = ?', [id]);
+        if (columna.length === 0) {
+            return res.status(404).json({ success: false, error: 'Columna no encontrada' });
+        }
+        const nuevaBloqueada = columna[0].bloqueada ? 0 : 1;
+        await db.execute('UPDATE poa_columnas SET bloqueada = ? WHERE id = ?', [nuevaBloqueada, id]);
+        res.json({ success: true, message: nuevaBloqueada ? 'Columna bloqueada' : 'Columna desbloqueada', bloqueada: !!nuevaBloqueada });
+        emit('poa:updated', { type: 'columna:toggle', id: parseInt(req.params.id) });
+    } catch (error) {
+        console.error('Error al toggle columna:', error);
+        res.status(500).json({ success: false, error: 'Error al cambiar estado de la columna' });
+    }
+});
+
+router.delete('/poa-columnas/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const [result] = await db.execute('DELETE FROM poa_columnas WHERE id = ?', [id]);
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, error: 'Columna no encontrada' });
+        }
+        res.json({ success: true, message: 'Columna eliminada' });
+        emit('poa:updated', { type: 'columna:deleted', id: parseInt(req.params.id) });
+    } catch (error) {
+        console.error('Error al eliminar columna:', error);
+        res.status(500).json({ success: false, error: 'Error al eliminar la columna' });
+    }
+});
+
+// ========== FILAS DE DATOS ==========
+
+router.get('/poa-filas/:seccionId', async (req, res) => {
+    try {
+        const { seccionId } = req.params;
+        const [filas] = await db.execute('SELECT * FROM poa_filas WHERE seccion_id = ? ORDER BY orden ASC, id ASC', [seccionId]);
+        res.json({ success: true, data: filas });
+    } catch (error) {
+        console.error('Error al obtener filas:', error);
+        res.status(500).json({ success: false, error: 'Error al obtener filas' });
+    }
+});
+
+router.post('/poa-filas', async (req, res) => {
+    try {
+        const { seccion_id, valores } = req.body;
+        if (!seccion_id) {
+            return res.status(400).json({ success: false, error: 'La sección es requerida' });
+        }
+        const [result] = await db.execute(
+            'INSERT INTO poa_filas (seccion_id, valores) VALUES (?, ?)',
+            [seccion_id, JSON.stringify(valores || {})]
+        );
+        const [nueva] = await db.execute('SELECT * FROM poa_filas WHERE id = ?', [result.insertId]);
+        res.status(201).json({ success: true, data: nueva[0], message: 'Fila agregada' });
+        emit('poa:updated', { type: 'fila:created', id: result.insertId });
+    } catch (error) {
+        console.error('Error al crear fila:', error);
+        res.status(500).json({ success: false, error: 'Error al crear la fila' });
+    }
+});
+
+router.put('/poa-filas/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { valores } = req.body;
+        const [result] = await db.execute(
+            'UPDATE poa_filas SET valores = ? WHERE id = ?',
+            [JSON.stringify(valores || {}), id]
+        );
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, error: 'Fila no encontrada' });
+        }
+        const [updated] = await db.execute('SELECT * FROM poa_filas WHERE id = ?', [id]);
+        res.json({ success: true, data: updated[0], message: 'Fila actualizada' });
+        emit('poa:updated', { type: 'fila:updated', id: parseInt(req.params.id) });
+    } catch (error) {
+        console.error('Error al actualizar fila:', error);
+        res.status(500).json({ success: false, error: 'Error al actualizar la fila' });
+    }
+});
+
+router.delete('/poa-filas/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const [result] = await db.execute('DELETE FROM poa_filas WHERE id = ?', [id]);
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, error: 'Fila no encontrada' });
+        }
+        res.json({ success: true, message: 'Fila eliminada' });
+        emit('poa:updated', { type: 'fila:deleted', id: parseInt(req.params.id) });
+    } catch (error) {
+        console.error('Error al eliminar fila:', error);
+        res.status(500).json({ success: false, error: 'Error al eliminar la fila' });
+    }
+});
+
+module.exports = router;

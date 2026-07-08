@@ -25,6 +25,7 @@ const logosRoutes = require('./routes/logos.routes');
 const matrizRoutes = require('./routes/matriz.routes');
 const smoaRoutes = require('./routes/smoa.routes');
 const sepladeRoutes = require('./routes/seplade.routes');
+const poaRoutes = require('./routes/poa.routes');
 
 // ========== MIGRATIONS ==========
 async function runMigrations() {
@@ -67,6 +68,10 @@ async function runMigrations() {
     try {
         await db.execute("ALTER TABLE smoa_encabezado ADD COLUMN imagen_alineacion VARCHAR(20) DEFAULT 'center'");
         console.log('✅ Columna imagen_alineacion agregada a smoa_encabezado');
+    } catch (_) {}
+    try {
+        await db.execute('ALTER TABLE poa_columnas ADD COLUMN bloqueada TINYINT(1) DEFAULT 0 AFTER activa');
+        console.log('✅ Columna bloqueada agregada a poa_columnas');
     } catch (_) {}
 }
 
@@ -149,6 +154,7 @@ app.use('/api/university', logosRoutes);
 app.use('/api/university', matrizRoutes);
 app.use('/api/university', smoaRoutes);
 app.use('/api/university', sepladeRoutes);
+app.use('/api/university', poaRoutes);
 
 const server = http.createServer(app);
 const io = new Server(server, {
