@@ -159,47 +159,47 @@ router.delete('/poa-secciones/:id/usuarios/:usuarioId/:usuarioTipo', async (req,
     }
 });
 
-// ========== ENCABEZADO ==========
+// ========== DATOS (AÑO) ==========
 
 router.get('/poa-encabezado', async (req, res) => {
     try {
         let [rows] = await db.execute('SELECT * FROM poa_encabezado LIMIT 1');
         if (rows.length === 0) {
             const [result] = await db.execute(
-                "INSERT INTO poa_encabezado (direccion, anio, cuatrimestre) VALUES ('', '', '')"
+                "INSERT INTO poa_encabezado (anio) VALUES ('')"
             );
             const [newRows] = await db.execute('SELECT * FROM poa_encabezado WHERE id = ?', [result.insertId]);
             rows = newRows;
         }
         res.json({ success: true, data: rows[0] });
     } catch (error) {
-        console.error('Error al obtener encabezado:', error);
-        res.status(500).json({ success: false, error: 'Error al obtener encabezado' });
+        console.error('Error al obtener datos:', error);
+        res.status(500).json({ success: false, error: 'Error al obtener datos' });
     }
 });
 
 router.put('/poa-encabezado', async (req, res) => {
     try {
-        sanitize(req.body, { direccion: sanitizeStr, anio: sanitizeStr, cuatrimestre: sanitizeStr });
-        const { direccion, anio, cuatrimestre } = req.body;
+        sanitize(req.body, { anio: sanitizeStr });
+        const { anio } = req.body;
         let [rows] = await db.execute('SELECT id FROM poa_encabezado LIMIT 1');
         if (rows.length === 0) {
             const [result] = await db.execute(
-                'INSERT INTO poa_encabezado (direccion, anio, cuatrimestre) VALUES (?, ?, ?)',
-                [direccion || '', anio || '', cuatrimestre || '']
+                'INSERT INTO poa_encabezado (anio) VALUES (?)',
+                [anio || '']
             );
         } else {
             await db.execute(
-                'UPDATE poa_encabezado SET direccion = ?, anio = ?, cuatrimestre = ? WHERE id = ?',
-                [direccion || '', anio || '', cuatrimestre || '', rows[0].id]
+                'UPDATE poa_encabezado SET anio = ? WHERE id = ?',
+                [anio || '', rows[0].id]
             );
         }
         const [updated] = await db.execute('SELECT * FROM poa_encabezado LIMIT 1');
-        res.json({ success: true, data: updated[0], message: 'Encabezado guardado' });
+        res.json({ success: true, data: updated[0], message: 'Año guardado' });
         emit('poa:updated', { type: 'encabezado:updated' });
     } catch (error) {
-        console.error('Error al guardar encabezado:', error);
-        res.status(500).json({ success: false, error: 'Error al guardar encabezado' });
+        console.error('Error al guardar año:', error);
+        res.status(500).json({ success: false, error: 'Error al guardar año' });
     }
 });
 
