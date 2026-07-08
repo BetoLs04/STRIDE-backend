@@ -69,10 +69,6 @@ async function runMigrations() {
         await db.execute("ALTER TABLE smoa_encabezado ADD COLUMN imagen_alineacion VARCHAR(20) DEFAULT 'center'");
         console.log('✅ Columna imagen_alineacion agregada a smoa_encabezado');
     } catch (_) {}
-    try {
-        await db.execute('ALTER TABLE poa_columnas ADD COLUMN bloqueada TINYINT(1) DEFAULT 0 AFTER activa');
-        console.log('✅ Columna bloqueada agregada a poa_columnas');
-    } catch (_) {}
 }
 
 const app = express();

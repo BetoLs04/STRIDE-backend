@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
 const { emit } = require('../services/socketEmitter');
-const { TIPOS_USUARIO_VALIDOS, ALINEACIONES_VALIDAS } = require('../utils/constants');
+const { TIPOS_USUARIO_VALIDOS } = require('../utils/constants');
 const { requireSuperAdmin } = require('../middleware/roles');
 const { sanitize, sanitizeStr } = require('../utils/sanitize');
 
@@ -200,105 +200,6 @@ router.put('/poa-encabezado', async (req, res) => {
     } catch (error) {
         console.error('Error al guardar encabezado:', error);
         res.status(500).json({ success: false, error: 'Error al guardar encabezado' });
-    }
-});
-
-// ========== COLUMNAS ==========
-
-router.get('/poa-columnas', async (req, res) => {
-    try {
-        const [columnas] = await db.execute('SELECT * FROM poa_columnas ORDER BY orden ASC, id ASC');
-        res.json({ success: true, data: columnas });
-    } catch (error) {
-        console.error('Error al obtener columnas:', error);
-        res.status(500).json({ success: false, error: 'Error al obtener columnas' });
-    }
-});
-
-router.post('/poa-columnas', async (req, res) => {
-    try {
-        sanitize(req.body, { nombre: sanitizeStr });
-        const { nombre } = req.body;
-        if (!nombre || !nombre.trim()) {
-            return res.status(400).json({ success: false, error: 'El nombre es requerido' });
-        }
-        const [result] = await db.execute('INSERT INTO poa_columnas (nombre) VALUES (?)', [nombre.trim()]);
-        res.status(201).json({ success: true, message: 'Columna creada', columnaId: result.insertId });
-        emit('poa:updated', { type: 'columna:created', id: result.insertId });
-    } catch (error) {
-        console.error('Error al crear columna:', error);
-        res.status(500).json({ success: false, error: 'Error al crear la columna' });
-    }
-});
-
-router.put('/poa-columnas/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        sanitize(req.body, { nombre: sanitizeStr });
-        const { nombre, alineacion } = req.body;
-        if (!nombre || !nombre.trim()) {
-            return res.status(400).json({ success: false, error: 'El nombre es requerido' });
-        }
-        const alineacionVal = ALINEACIONES_VALIDAS.includes(alineacion) ? alineacion : 'center';
-        const [result] = await db.execute('UPDATE poa_columnas SET nombre = ?, alineacion = ? WHERE id = ?', [nombre.trim(), alineacionVal, id]);
-        if (result.affectedRows === 0) {
-            return res.status(404).json({ success: false, error: 'Columna no encontrada' });
-        }
-        const [updated] = await db.execute('SELECT * FROM poa_columnas WHERE id = ?', [id]);
-        res.json({ success: true, data: updated[0], message: 'Columna actualizada' });
-        emit('poa:updated', { type: 'columna:updated', id: parseInt(req.params.id) });
-    } catch (error) {
-        console.error('Error al actualizar columna:', error);
-        res.status(500).json({ success: false, error: 'Error al actualizar la columna' });
-    }
-});
-
-router.put('/poa-columnas/:id/alineacion', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { alineacion } = req.body;
-        if (!ALINEACIONES_VALIDAS.includes(alineacion)) {
-            return res.status(400).json({ success: false, error: 'Alineación inválida' });
-        }
-        await db.execute('UPDATE poa_columnas SET alineacion = ? WHERE id = ?', [alineacion, id]);
-        const [updated] = await db.execute('SELECT * FROM poa_columnas WHERE id = ?', [id]);
-        res.json({ success: true, data: updated[0], message: 'Alineación actualizada' });
-        emit('poa:updated', { type: 'columna:alineacion', id: parseInt(req.params.id) });
-    } catch (error) {
-        console.error('Error al actualizar alineación:', error);
-        res.status(500).json({ success: false, error: 'Error al actualizar alineación' });
-    }
-});
-
-router.put('/poa-columnas/:id/toggle', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const [columna] = await db.execute('SELECT bloqueada FROM poa_columnas WHERE id = ?', [id]);
-        if (columna.length === 0) {
-            return res.status(404).json({ success: false, error: 'Columna no encontrada' });
-        }
-        const nuevaBloqueada = columna[0].bloqueada ? 0 : 1;
-        await db.execute('UPDATE poa_columnas SET bloqueada = ? WHERE id = ?', [nuevaBloqueada, id]);
-        res.json({ success: true, message: nuevaBloqueada ? 'Columna bloqueada' : 'Columna desbloqueada', bloqueada: !!nuevaBloqueada });
-        emit('poa:updated', { type: 'columna:toggle', id: parseInt(req.params.id) });
-    } catch (error) {
-        console.error('Error al toggle columna:', error);
-        res.status(500).json({ success: false, error: 'Error al cambiar estado de la columna' });
-    }
-});
-
-router.delete('/poa-columnas/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const [result] = await db.execute('DELETE FROM poa_columnas WHERE id = ?', [id]);
-        if (result.affectedRows === 0) {
-            return res.status(404).json({ success: false, error: 'Columna no encontrada' });
-        }
-        res.json({ success: true, message: 'Columna eliminada' });
-        emit('poa:updated', { type: 'columna:deleted', id: parseInt(req.params.id) });
-    } catch (error) {
-        console.error('Error al eliminar columna:', error);
-        res.status(500).json({ success: false, error: 'Error al eliminar la columna' });
     }
 });
 
