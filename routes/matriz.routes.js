@@ -7,11 +7,9 @@ const { CAMPOS_BLOQUEO_MAP, TIPOS_USUARIO_VALIDOS, ALINEACIONES_VALIDAS } = requ
 const { requireSuperAdmin } = require('../middleware/roles');
 const { sanitize, sanitizeStr } = require('../utils/sanitize');
 
-router.use(requireSuperAdmin);
-
 // ========== USUARIOS DISPONIBLES ==========
 
-router.get('/matriz-usuarios', async (req, res) => {
+router.get('/matriz-usuarios', requireSuperAdmin, async (req, res) => {
     try {
         const [directivos] = await db.execute('SELECT id, nombre_completo as nombre, direccion_id FROM directivos ORDER BY nombre_completo');
         const [personal] = await db.execute('SELECT id, nombre_completo as nombre, direccion_id FROM personal ORDER BY nombre_completo');
@@ -57,7 +55,7 @@ router.get('/matriz-secciones', async (req, res) => {
     }
 });
 
-router.post('/matriz-secciones', async (req, res) => {
+router.post('/matriz-secciones', requireSuperAdmin, async (req, res) => {
     try {
         sanitize(req.body, { nombre: sanitizeStr });
         const { nombre } = req.body;
@@ -73,7 +71,7 @@ router.post('/matriz-secciones', async (req, res) => {
     }
 });
 
-router.put('/matriz-secciones/:id', async (req, res) => {
+router.put('/matriz-secciones/:id', requireSuperAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         sanitize(req.body, { nombre: sanitizeStr });
@@ -93,7 +91,7 @@ router.put('/matriz-secciones/:id', async (req, res) => {
     }
 });
 
-router.delete('/matriz-secciones/:id', async (req, res) => {
+router.delete('/matriz-secciones/:id', requireSuperAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const [result] = await db.execute('DELETE FROM matriz_secciones WHERE id = ?', [id]);
@@ -110,7 +108,7 @@ router.delete('/matriz-secciones/:id', async (req, res) => {
 
 // ========== ASIGNACIÓN DE USUARIOS ==========
 
-router.post('/matriz-secciones/:id/usuarios', async (req, res) => {
+router.post('/matriz-secciones/:id/usuarios', requireSuperAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const { usuario_id, usuario_tipo } = req.body;
@@ -139,7 +137,7 @@ router.post('/matriz-secciones/:id/usuarios', async (req, res) => {
     }
 });
 
-router.delete('/matriz-secciones/:id/usuarios/:usuarioId/:usuarioTipo', async (req, res) => {
+router.delete('/matriz-secciones/:id/usuarios/:usuarioId/:usuarioTipo', requireSuperAdmin, async (req, res) => {
     try {
         const { id, usuarioId, usuarioTipo } = req.params;
         if (!TIPOS_USUARIO_VALIDOS.includes(usuarioTipo)) {
@@ -179,7 +177,7 @@ router.get('/matriz-encabezado', async (req, res) => {
     }
 });
 
-router.put('/matriz-encabezado', async (req, res) => {
+router.put('/matriz-encabezado', requireSuperAdmin, async (req, res) => {
     try {
         sanitize(req.body, { codigo: sanitizeStr, revision: sanitizeStr, fecha_actualizacion: sanitizeStr, fecha_revision_indicadores: sanitizeStr, responsable: sanitizeStr, anio: sanitizeStr });
         const { codigo, revision, fecha_actualizacion, fecha_revision_indicadores, responsable, anio } = req.body;
@@ -216,7 +214,7 @@ router.get('/matriz-columnas', async (req, res) => {
     }
 });
 
-router.post('/matriz-columnas', async (req, res) => {
+router.post('/matriz-columnas', requireSuperAdmin, async (req, res) => {
     try {
         sanitize(req.body, { nombre: sanitizeStr });
         const { nombre } = req.body;
@@ -232,7 +230,7 @@ router.post('/matriz-columnas', async (req, res) => {
     }
 });
 
-router.put('/matriz-columnas/:id', async (req, res) => {
+router.put('/matriz-columnas/:id', requireSuperAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         sanitize(req.body, { nombre: sanitizeStr });
@@ -254,7 +252,7 @@ router.put('/matriz-columnas/:id', async (req, res) => {
     }
 });
 
-router.put('/matriz-columnas/:id/alineacion', async (req, res) => {
+router.put('/matriz-columnas/:id/alineacion', requireSuperAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const { alineacion } = req.body;
@@ -276,7 +274,7 @@ router.put('/matriz-columnas/:id/alineacion', async (req, res) => {
     }
 });
 
-router.put('/matriz-columnas/:id/toggle', async (req, res) => {
+router.put('/matriz-columnas/:id/toggle', requireSuperAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const [columna] = await db.execute('SELECT bloqueada FROM matriz_columnas WHERE id = ?', [id]);
@@ -295,7 +293,7 @@ router.put('/matriz-columnas/:id/toggle', async (req, res) => {
     }
 });
 
-router.put('/matriz-encabezado/toggle-bloqueo/:campo', async (req, res) => {
+router.put('/matriz-encabezado/toggle-bloqueo/:campo', requireSuperAdmin, async (req, res) => {
     try {
         const campo = CAMPOS_BLOQUEO_MAP[req.params.campo];
         if (!campo) {
@@ -318,7 +316,7 @@ router.put('/matriz-encabezado/toggle-bloqueo/:campo', async (req, res) => {
     }
 });
 
-router.delete('/matriz-columnas/:id', async (req, res) => {
+router.delete('/matriz-columnas/:id', requireSuperAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const [result] = await db.execute('DELETE FROM matriz_columnas WHERE id = ?', [id]);

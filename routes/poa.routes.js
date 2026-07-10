@@ -6,11 +6,9 @@ const { TIPOS_USUARIO_VALIDOS } = require('../utils/constants');
 const { requireSuperAdmin } = require('../middleware/roles');
 const { sanitize, sanitizeStr } = require('../utils/sanitize');
 
-router.use(requireSuperAdmin);
-
 // ========== USUARIOS DISPONIBLES ==========
 
-router.get('/poa-usuarios', async (req, res) => {
+router.get('/poa-usuarios', requireSuperAdmin, async (req, res) => {
     try {
         const [directivos] = await db.execute('SELECT id, nombre_completo as nombre, direccion_id FROM directivos ORDER BY nombre_completo');
         const [personal] = await db.execute('SELECT id, nombre_completo as nombre, direccion_id FROM personal ORDER BY nombre_completo');
@@ -56,7 +54,7 @@ router.get('/poa-secciones', async (req, res) => {
     }
 });
 
-router.post('/poa-secciones', async (req, res) => {
+router.post('/poa-secciones', requireSuperAdmin, async (req, res) => {
     try {
         sanitize(req.body, { nombre: sanitizeStr });
         const { nombre } = req.body;
@@ -72,7 +70,7 @@ router.post('/poa-secciones', async (req, res) => {
     }
 });
 
-router.put('/poa-secciones/:id', async (req, res) => {
+router.put('/poa-secciones/:id', requireSuperAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         sanitize(req.body, { nombre: sanitizeStr });
@@ -92,7 +90,7 @@ router.put('/poa-secciones/:id', async (req, res) => {
     }
 });
 
-router.delete('/poa-secciones/:id', async (req, res) => {
+router.delete('/poa-secciones/:id', requireSuperAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const [result] = await db.execute('DELETE FROM poa_secciones WHERE id = ?', [id]);
@@ -109,7 +107,7 @@ router.delete('/poa-secciones/:id', async (req, res) => {
 
 // ========== ASIGNACIÓN DE USUARIOS ==========
 
-router.post('/poa-secciones/:id/usuarios', async (req, res) => {
+router.post('/poa-secciones/:id/usuarios', requireSuperAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const { usuario_id, usuario_tipo } = req.body;
@@ -138,7 +136,7 @@ router.post('/poa-secciones/:id/usuarios', async (req, res) => {
     }
 });
 
-router.delete('/poa-secciones/:id/usuarios/:usuarioId/:usuarioTipo', async (req, res) => {
+router.delete('/poa-secciones/:id/usuarios/:usuarioId/:usuarioTipo', requireSuperAdmin, async (req, res) => {
     try {
         const { id, usuarioId, usuarioTipo } = req.params;
         if (!TIPOS_USUARIO_VALIDOS.includes(usuarioTipo)) {
@@ -178,7 +176,7 @@ router.get('/poa-encabezado', async (req, res) => {
     }
 });
 
-router.put('/poa-encabezado', async (req, res) => {
+router.put('/poa-encabezado', requireSuperAdmin, async (req, res) => {
     try {
         sanitize(req.body, { anio: sanitizeStr });
         const { anio } = req.body;
