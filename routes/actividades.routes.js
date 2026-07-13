@@ -8,7 +8,7 @@ const { requireRole } = require('../middleware/roles');
 const { sanitize, sanitizeStr } = require('../utils/sanitize');
 const { emit } = require('../services/socketEmitter');
 
-router.post('/actividades', requireRole('superadmin', 'directivo'), uploadActividades.array('imagenes', 5), async (req, res) => {
+router.post('/actividades', requireRole('superadmin', 'personal'), uploadActividades.array('imagenes', 5), async (req, res) => {
     try {
         sanitize(req.body, { titulo: sanitizeStr, descripcion: sanitizeStr, tipo_actividad: sanitizeStr });
         const { titulo, descripcion, tipo_actividad, fecha_inicio, fecha_fin, direccion_id, creado_por_id, creado_por_tipo } = req.body;
@@ -74,7 +74,7 @@ router.put('/actividades/:id/estado', requireRole('superadmin', 'directivo'), as
     }
 });
 
-router.put('/actividades/:id', requireRole('superadmin', 'directivo'), uploadActividades.array('imagenes', 5), async (req, res) => {
+router.put('/actividades/:id', requireRole('superadmin', 'directivo', 'personal'), uploadActividades.array('imagenes', 5), async (req, res) => {
     try {
         const { id } = req.params;
         sanitize(req.body, { titulo: sanitizeStr, descripcion: sanitizeStr, tipo_actividad: sanitizeStr });
@@ -148,7 +148,7 @@ router.put('/actividades/:id', requireRole('superadmin', 'directivo'), uploadAct
     }
 });
 
-router.delete('/actividades/imagen/:imagenId', requireRole('superadmin', 'directivo'), async (req, res) => {
+router.delete('/actividades/imagen/:imagenId', requireRole('superadmin', 'directivo', 'personal'), async (req, res) => {
     try {
         const { imagenId } = req.params;
         const { creado_por_id } = req.body;
@@ -250,7 +250,7 @@ router.get('/actividades/todas', async (req, res) => {
     }
 });
 
-router.delete('/actividades/:id', requireRole('superadmin', 'directivo'), async (req, res) => {
+router.delete('/actividades/:id', requireRole('superadmin', 'directivo', 'personal'), async (req, res) => {
     try {
         const { id } = req.params;
         console.log(`🗑️ Solicitando eliminación de actividad ID: ${id}`);
