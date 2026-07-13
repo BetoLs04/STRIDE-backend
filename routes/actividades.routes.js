@@ -26,9 +26,13 @@ router.post('/actividades', requireRole('superadmin', 'directivo'), uploadActivi
             }
             return res.status(400).json({ success: false, error: 'La fecha de fin no puede ser anterior a la fecha de inicio' });
         }
+        const [periodoActivo] = await db.execute(
+            'SELECT id FROM periodos_actividades WHERE activo = 1 ORDER BY anio DESC, FIELD(periodo, "enero-abril","mayo-agosto","septiembre-diciembre") DESC LIMIT 1'
+        );
+        const periodoId = periodoActivo.length > 0 ? periodoActivo[0].id : null;
         const [result] = await db.execute(
-            `INSERT INTO actividades (titulo, descripcion, tipo_actividad, fecha_inicio, fecha_fin, direccion_id, creado_por_id, creado_por_tipo, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pendiente')`,
-            [titulo, descripcion || null, tipo_actividad, fecha_inicio, fecha_fin || null, direccion_id, creado_por_id, creado_por_tipo]
+            `INSERT INTO actividades (titulo, descripcion, tipo_actividad, fecha_inicio, fecha_fin, direccion_id, creado_por_id, creado_por_tipo, estado, periodo_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pendiente', ?)`,
+            [titulo, descripcion || null, tipo_actividad, fecha_inicio, fecha_fin || null, direccion_id, creado_por_id, creado_por_tipo, periodoId]
         );
         const actividadId = result.insertId;
         if (req.files && req.files.length > 0) {
@@ -102,9 +106,13 @@ router.put('/actividades/:id', requireRole('superadmin', 'directivo'), uploadAct
             }
             return res.status(400).json({ success: false, error: 'La fecha de fin no puede ser anterior a la fecha de inicio' });
         }
+        const [periodoEdit] = await db.execute(
+            'SELECT id FROM periodos_actividades WHERE activo = 1 ORDER BY anio DESC, FIELD(periodo, "enero-abril","mayo-agosto","septiembre-diciembre") DESC LIMIT 1'
+        );
+        const periodoEditId = periodoEdit.length > 0 ? periodoEdit[0].id : null;
         await db.execute(
-            `UPDATE actividades SET titulo = ?, descripcion = ?, tipo_actividad = ?, fecha_inicio = ?, fecha_fin = ? WHERE id = ?`,
-            [titulo, descripcion || null, tipo_actividad, fecha_inicio, fecha_fin || null, id]
+            `UPDATE actividades SET titulo = ?, descripcion = ?, tipo_actividad = ?, fecha_inicio = ?, fecha_fin = ?, periodo_id = ? WHERE id = ?`,
+            [titulo, descripcion || null, tipo_actividad, fecha_inicio, fecha_fin || null, periodoEditId, id]
         );
         let imagenesAgregadas = 0;
         if (req.files && req.files.length > 0) {
@@ -177,6 +185,8 @@ router.get('/actividades/direccion/:direccion_id', async (req, res) => {
         const [actividades] = await db.execute(`
             SELECT a.*, 
                    d.nombre as direccion_nombre,
+                   p.periodo as periodo_nombre,
+                   p.anio as periodo_anio,
                    CASE 
                      WHEN a.creado_por_tipo = 'directivo' THEN dir.nombre_completo
                      WHEN a.creado_por_tipo = 'personal' THEN per.nombre_completo
@@ -184,6 +194,7 @@ router.get('/actividades/direccion/:direccion_id', async (req, res) => {
                    END as creado_por_nombre
             FROM actividades a
             LEFT JOIN direcciones d ON a.direccion_id = d.id
+            LEFT JOIN periodos_actividades p ON a.periodo_id = p.id
             LEFT JOIN directivos dir ON a.creado_por_id = dir.id AND a.creado_por_tipo = 'directivo'
             LEFT JOIN personal per ON a.creado_por_id = per.id AND a.creado_por_tipo = 'personal'
             WHERE a.direccion_id = ?
@@ -210,6 +221,8 @@ router.get('/actividades/todas', async (req, res) => {
         const [actividades] = await db.execute(`
             SELECT a.*, 
                    d.nombre as direccion_nombre,
+                   p.periodo as periodo_nombre,
+                   p.anio as periodo_anio,
                    CASE 
                      WHEN a.creado_por_tipo = 'directivo' THEN dir.nombre_completo
                      WHEN a.creado_por_tipo = 'personal' THEN per.nombre_completo
@@ -217,6 +230,7 @@ router.get('/actividades/todas', async (req, res) => {
                    END as creado_por_nombre
             FROM actividades a
             LEFT JOIN direcciones d ON a.direccion_id = d.id
+            LEFT JOIN periodos_actividades p ON a.periodo_id = p.id
             LEFT JOIN directivos dir ON a.creado_por_id = dir.id AND a.creado_por_tipo = 'directivo'
             LEFT JOIN personal per ON a.creado_por_id = per.id AND a.creado_por_tipo = 'personal'
             ORDER BY a.fecha_creacion DESC
@@ -267,6 +281,108 @@ router.delete('/actividades/:id', requireRole('superadmin', 'directivo'), async 
     } catch (error) {
         console.error('❌ Error al eliminar actividad:', error);
         res.status(500).json({ success: false, error: error.message || 'Error al eliminar la actividad' });
+    }
+});
+
+// ========== ESTADO DE LECTURA (Leído / No leído) ==========
+router.get('/actividades/lectura', requireRole('superadmin'), async (req, res) => {
+    try {
+        const superUserId = req.user.id;
+        const [lecturas] = await db.execute(
+            'SELECT actividad_id, leido FROM actividad_lectura WHERE super_user_id = ?',
+            [superUserId]
+        );
+        res.json({ success: true, data: lecturas });
+    } catch (error) {
+        console.error('Error al obtener lecturas:', error);
+        res.status(500).json({ success: false, error: 'Error al obtener estados de lectura' });
+    }
+});
+
+router.put('/actividades/:id/lectura', requireRole('superadmin'), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const superUserId = req.user.id;
+        const [existing] = await db.execute(
+            'SELECT id, leido FROM actividad_lectura WHERE actividad_id = ? AND super_user_id = ?',
+            [id, superUserId]
+        );
+        if (existing.length > 0) {
+            const nuevoValor = existing[0].leido ? 0 : 1;
+            await db.execute(
+                'UPDATE actividad_lectura SET leido = ? WHERE id = ?',
+                [nuevoValor, existing[0].id]
+            );
+            res.json({ success: true, leido: !!nuevoValor, message: nuevoValor ? 'Marcada como leída' : 'Marcada como no leída' });
+            emit('actividad:lectura-changed', { actividadId: parseInt(id), superUserId, leido: !!nuevoValor });
+        } else {
+            await db.execute(
+                'INSERT INTO actividad_lectura (actividad_id, super_user_id, leido) VALUES (?, ?, 1)',
+                [id, superUserId]
+            );
+            res.json({ success: true, leido: true, message: 'Marcada como leída' });
+            emit('actividad:lectura-changed', { actividadId: parseInt(id), superUserId, leido: true });
+        }
+    } catch (error) {
+        console.error('Error al alternar lectura:', error);
+        res.status(500).json({ success: false, error: 'Error al actualizar estado de lectura' });
+    }
+});
+
+// ========== PERIODOS (Cuatrimestres) ==========
+router.get('/actividades/periodos', requireRole('superadmin'), async (req, res) => {
+    try {
+        const [periodos] = await db.execute(
+            'SELECT * FROM periodos_actividades ORDER BY anio ASC, FIELD(periodo, "enero-abril","mayo-agosto","septiembre-diciembre") ASC'
+        );
+        res.json({ success: true, data: periodos });
+    } catch (error) {
+        console.error('Error al obtener periodos:', error);
+        res.status(500).json({ success: false, error: 'Error al obtener periodos' });
+    }
+});
+
+router.post('/actividades/periodos/abrir-siguiente', requireRole('superadmin'), async (req, res) => {
+    try {
+        const [ultimoActivo] = await db.execute(
+            'SELECT * FROM periodos_actividades WHERE activo = 1 ORDER BY anio DESC, FIELD(periodo, "enero-abril","mayo-agosto","septiembre-diciembre") DESC LIMIT 1'
+        );
+        let nuevoAnio, nuevoPeriodo;
+        const PERIODOS = ['enero-abril', 'mayo-agosto', 'septiembre-diciembre'];
+        if (ultimoActivo.length > 0) {
+            const idx = PERIODOS.indexOf(ultimoActivo[0].periodo);
+            if (idx < 2) {
+                nuevoAnio = ultimoActivo[0].anio;
+                nuevoPeriodo = PERIODOS[idx + 1];
+            } else {
+                nuevoAnio = ultimoActivo[0].anio + 1;
+                nuevoPeriodo = PERIODOS[0];
+            }
+        } else {
+            const hoy = new Date();
+            const mes = hoy.getMonth() + 1;
+            nuevoAnio = hoy.getFullYear();
+            if (mes >= 1 && mes <= 4) nuevoPeriodo = 'enero-abril';
+            else if (mes >= 5 && mes <= 8) nuevoPeriodo = 'mayo-agosto';
+            else nuevoPeriodo = 'septiembre-diciembre';
+        }
+        const [existente] = await db.execute(
+            'SELECT id FROM periodos_actividades WHERE anio = ? AND periodo = ?',
+            [nuevoAnio, nuevoPeriodo]
+        );
+        if (existente.length > 0) {
+            await db.execute('UPDATE periodos_actividades SET activo = 1 WHERE id = ?', [existente[0].id]);
+        } else {
+            await db.execute(
+                'INSERT INTO periodos_actividades (anio, periodo, activo) VALUES (?, ?, 1)',
+                [nuevoAnio, nuevoPeriodo]
+            );
+        }
+        res.json({ success: true, message: `Periodo ${nuevoPeriodo} ${nuevoAnio} abierto exitosamente` });
+        emit('actividad:periodo-abierto', { anio: nuevoAnio, periodo: nuevoPeriodo });
+    } catch (error) {
+        console.error('Error al abrir siguiente periodo:', error);
+        res.status(500).json({ success: false, error: 'Error al abrir el siguiente periodo' });
     }
 });
 

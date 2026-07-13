@@ -69,6 +69,38 @@ async function runMigrations() {
         await db.execute("ALTER TABLE smoa_encabezado ADD COLUMN imagen_alineacion VARCHAR(20) DEFAULT 'center'");
         console.log('✅ Columna imagen_alineacion agregada a smoa_encabezado');
     } catch (_) {}
+    try {
+        await db.execute(`CREATE TABLE IF NOT EXISTS actividad_lectura (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            actividad_id INT NOT NULL,
+            super_user_id INT NOT NULL,
+            leido TINYINT(1) DEFAULT 0,
+            fecha_lectura TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY unique_lectura (actividad_id, super_user_id),
+            FOREIGN KEY (actividad_id) REFERENCES actividades(id) ON DELETE CASCADE,
+            FOREIGN KEY (super_user_id) REFERENCES super_users(id) ON DELETE CASCADE
+        )`);
+        console.log('✅ Tabla actividad_lectura creada/verificada');
+    } catch (_) {}
+    try {
+        await db.execute(`CREATE TABLE IF NOT EXISTS periodos_actividades (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            anio INT NOT NULL,
+            periodo VARCHAR(30) NOT NULL,
+            activo TINYINT(1) DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY unique_periodo (anio, periodo)
+        )`);
+        console.log('✅ Tabla periodos_actividades creada/verificada');
+    } catch (_) {}
+    try {
+        await db.execute('ALTER TABLE actividades ADD COLUMN periodo_id INT DEFAULT NULL AFTER estado');
+        console.log('✅ Columna periodo_id agregada a actividades');
+    } catch (_) {}
+    try {
+        await db.execute('ALTER TABLE actividades ADD FOREIGN KEY (periodo_id) REFERENCES periodos_actividades(id) ON DELETE SET NULL');
+        console.log('✅ FK periodo_id agregada a actividades');
+    } catch (_) {}
 }
 
 const app = express();
