@@ -54,7 +54,7 @@ router.post('/actividades', requireRole('superadmin', 'personal'), uploadActivid
     }
 });
 
-router.put('/actividades/:id/estado', requireRole('superadmin', 'directivo'), async (req, res) => {
+router.put('/actividades/:id/estado', requireRole('superadmin', 'personal'), async (req, res) => {
     try {
         const { id } = req.params;
         const { estado } = req.body;
