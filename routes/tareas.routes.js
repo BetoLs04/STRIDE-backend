@@ -4,7 +4,8 @@ const path = require('path');
 const fs = require('fs');
 const db = require('../config/database');
 const { uploadTareas } = require('../middleware/upload');
-const { requireSuperAdmin } = require('../middleware/roles');
+const { requireRole, requireSuperAdmin } = require('../middleware/roles');
+const { verifyToken } = require('../middleware/auth');
 const { sanitize, sanitizeStr } = require('../utils/sanitize');
 const { emit } = require('../services/socketEmitter');
 
@@ -176,7 +177,7 @@ router.get('/tareas/personal/:personalId', async (req, res) => {
   }
 });
 
-router.post('/tareas/completar/:asignacionId', uploadTareas.array('archivos', 5), async (req, res) => {
+router.post('/tareas/completar/:asignacionId', verifyToken, requireRole('personal'), uploadTareas.array('archivos', 5), async (req, res) => {
   const connection = await db.getConnection();
   try {
     await connection.beginTransaction();
@@ -198,6 +199,11 @@ router.post('/tareas/completar/:asignacionId', uploadTareas.array('archivos', 5)
       return res.status(404).json({ success: false, error: 'Asignación no encontrada' });
     }
     const asignacion = asignaciones[0];
+    if (String(asignacion.usuario_id) !== String(req.user.id) || asignacion.usuario_tipo !== req.user.tipo) {
+      await connection.rollback(); connection.release();
+      if (req.files && req.files.length > 0) { req.files.forEach(file => fs.unlinkSync(file.path)); }
+      return res.status(403).json({ success: false, error: 'No tienes permiso para completar esta tarea' });
+    }
     await connection.execute(
       `UPDATE tareas_asignaciones SET estado = 'completada', comentarios = ?, fecha_completado = NOW() WHERE id = ?`,
       [comentarios || null, asignacionId]
@@ -260,7 +266,7 @@ router.put('/tareas/asignacion/:id', requireSuperAdmin, async (req, res) => {
     }
 });
 
-router.delete('/tareas/archivo/:archivoId', async (req, res) => {
+router.delete('/tareas/archivo/:archivoId', verifyToken, requireRole('personal', 'superadmin'), async (req, res) => {
   try {
     const { archivoId } = req.params;
     const [archivos] = await db.execute('SELECT * FROM tareas_archivos WHERE id = ?', [archivoId]);

@@ -142,9 +142,32 @@ router.post('/seplade-indicadores', requireSuperAdmin, async (req, res) => {
     }
 });
 
-router.put('/seplade-indicadores/:id', requireSuperAdmin, async (req, res) => {
+router.put('/seplade-indicadores/:id', async (req, res) => {
     try {
-        const allowed = ['nombre', 'nivel', 'unidad_medida', 'meta_anual', 'encargado', 'evidencia_fisica', 'evidencia_online'];
+        const { tipo: userTipo, id: userId } = req.user;
+
+        const isSuperAdmin = userTipo === 'superadmin';
+        const isDirectivo = userTipo === 'directivo';
+        const isPersonal = userTipo === 'personal';
+
+        if (!isSuperAdmin && !isDirectivo && !isPersonal) {
+            return res.status(403).json({ success: false, error: 'No tienes permisos para realizar esta acción' });
+        }
+
+        let allowed;
+        if (isSuperAdmin) {
+            allowed = ['nombre', 'nivel', 'unidad_medida', 'meta_anual', 'encargado', 'evidencia_fisica', 'evidencia_online'];
+        } else {
+            const [existe] = await db.execute(
+                'SELECT 1 FROM seplade_indicador_usuarios WHERE indicador_id = ? AND usuario_id = ? AND usuario_tipo = ?',
+                [req.params.id, userId, userTipo]
+            );
+            if (existe.length === 0) {
+                return res.status(403).json({ success: false, error: 'No estás asignado a este indicador' });
+            }
+            allowed = ['evidencia_fisica', 'evidencia_online'];
+        }
+
         sanitize(req.body, { nombre: sanitizeStr, nivel: sanitizeStr, unidad_medida: sanitizeStr, encargado: sanitizeStr, evidencia_fisica: sanitizeStr, evidencia_online: sanitizeStr });
         const sets = [];
         const values = [];
