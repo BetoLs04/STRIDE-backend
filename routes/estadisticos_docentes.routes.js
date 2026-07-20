@@ -35,11 +35,11 @@ router.get('/estadisticos-docentes-hojas-anios', async (req, res) => {
 
 router.post('/estadisticos-docentes-hojas', requireSuperAdmin, async (req, res) => {
     try {
-        sanitize(req.body, { cuatrimestre: sanitizeStr, anio: sanitizeStr, notas: sanitizeStr });
-        const { cuatrimestre, anio, notas } = req.body;
+        sanitize(req.body, { cuatrimestre: sanitizeStr, anio: sanitizeStr });
+        const { cuatrimestre, anio } = req.body;
         const [result] = await db.execute(
-            'INSERT INTO estadisticos_docentes_hojas (cuatrimestre, anio, notas) VALUES (?, ?, ?)',
-            [cuatrimestre || '', anio || '', notas || '']
+            'INSERT INTO estadisticos_docentes_hojas (cuatrimestre, anio) VALUES (?, ?)',
+            [cuatrimestre || '', anio || '']
         );
         const [rows] = await db.execute('SELECT * FROM estadisticos_docentes_hojas WHERE id = ?', [result.insertId]);
         res.json({ success: true, data: rows[0] });
@@ -52,12 +52,11 @@ router.post('/estadisticos-docentes-hojas', requireSuperAdmin, async (req, res) 
 
 router.put('/estadisticos-docentes-hojas/:id', requireSuperAdmin, async (req, res) => {
     try {
-        sanitize(req.body, { cuatrimestre: sanitizeStr, anio: sanitizeStr, notas: sanitizeStr });
-        const { cuatrimestre, anio, notas } = req.body;
+        sanitize(req.body, { cuatrimestre: sanitizeStr, anio: sanitizeStr });
+        const { cuatrimestre, anio } = req.body;
         const sets = []; const vals = [];
         if (cuatrimestre !== undefined) { sets.push('cuatrimestre = ?'); vals.push(cuatrimestre); }
         if (anio !== undefined) { sets.push('anio = ?'); vals.push(anio); }
-        if (notas !== undefined) { sets.push('notas = ?'); vals.push(notas); }
         if (sets.length === 0) return res.status(400).json({ success: false, error: 'Sin campos' });
         vals.push(req.params.id);
         await db.execute(`UPDATE estadisticos_docentes_hojas SET ${sets.join(', ')} WHERE id = ?`, vals);
@@ -78,6 +77,41 @@ router.delete('/estadisticos-docentes-hojas/:id', requireSuperAdmin, async (req,
     } catch (error) {
         console.error('Error al eliminar hoja:', error);
         res.status(500).json({ success: false, error: 'Error al eliminar hoja' });
+    }
+});
+
+// ========== NOTAS GLOBALES ==========
+
+router.get('/estadisticos-docentes-notas', async (req, res) => {
+    try {
+        let [rows] = await db.execute('SELECT * FROM estadisticos_docentes_notas LIMIT 1');
+        if (rows.length === 0) {
+            const [result] = await db.execute('INSERT INTO estadisticos_docentes_notas (contenido) VALUES (\'\')');
+            const [newRows] = await db.execute('SELECT * FROM estadisticos_docentes_notas WHERE id = ?', [result.insertId]);
+            rows = newRows;
+        }
+        res.json({ success: true, data: rows[0] });
+    } catch (error) {
+        console.error('Error al obtener notas:', error);
+        res.status(500).json({ success: false, error: 'Error al obtener notas' });
+    }
+});
+
+router.put('/estadisticos-docentes-notas', requireSuperAdmin, async (req, res) => {
+    try {
+        const { contenido } = req.body;
+        let [rows] = await db.execute('SELECT * FROM estadisticos_docentes_notas LIMIT 1');
+        if (rows.length === 0) {
+            await db.execute('INSERT INTO estadisticos_docentes_notas (contenido) VALUES (?)', [contenido || '']);
+        } else {
+            await db.execute('UPDATE estadisticos_docentes_notas SET contenido = ? WHERE id = ?', [contenido || '', rows[0].id]);
+        }
+        const [updated] = await db.execute('SELECT * FROM estadisticos_docentes_notas LIMIT 1');
+        res.json({ success: true, data: updated[0], message: 'Notas guardadas' });
+        emit('estadisticos-docentes:updated', { type: 'notas:updated' });
+    } catch (error) {
+        console.error('Error al guardar notas:', error);
+        res.status(500).json({ success: false, error: 'Error al guardar notas' });
     }
 });
 
