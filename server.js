@@ -27,6 +27,7 @@ const smoaRoutes = require('./routes/smoa.routes');
 const sepladeRoutes = require('./routes/seplade.routes');
 const poaRoutes = require('./routes/poa.routes');
 const estadisticosGeneroRoutes = require('./routes/estadisticos_genero.routes');
+const estadisticosDocentesRoutes = require('./routes/estadisticos_docentes.routes');
 
 // ========== MIGRATIONS ==========
 async function runMigrations() {
@@ -185,6 +186,7 @@ app.use('/api/university', smoaRoutes);
 app.use('/api/university', sepladeRoutes);
 app.use('/api/university', poaRoutes);
 app.use('/api/university', estadisticosGeneroRoutes);
+app.use('/api/university', estadisticosDocentesRoutes);
 
 const server = http.createServer(app);
 const io = new Server(server, {
