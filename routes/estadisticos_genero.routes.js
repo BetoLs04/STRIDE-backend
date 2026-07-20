@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
 const { requireSuperAdmin } = require('../middleware/roles');
+const { TIPOS_USUARIO_VALIDOS } = require('../utils/constants');
 const { sanitize, sanitizeStr } = require('../utils/sanitize');
 const { emit } = require('../services/socketEmitter');
 
@@ -140,7 +141,7 @@ router.put('/estadisticos-genero-filas/:id', requireSuperAdmin, async (req, res)
     }
 });
 
-router.patch('/estadisticos-genero-filas/:id/celda', requireSuperAdmin, async (req, res) => {
+router.patch('/estadisticos-genero-filas/:id/celda', async (req, res) => {
     try {
         const { id } = req.params;
         const { key, value } = req.body;
@@ -151,6 +152,23 @@ router.patch('/estadisticos-genero-filas/:id/celda', requireSuperAdmin, async (r
         if (filas.length === 0) {
             return res.status(404).json({ success: false, error: 'Fila no encontrada' });
         }
+
+        const CAMPOS_EDITABLES_USUARIO = ['grupos', 'cant_hombres', 'cant_mujeres', 'aprov_hombres', 'aprov_mujeres'];
+
+        const esSuperAdmin = req.user?.tipo === 'superadmin';
+        if (!esSuperAdmin) {
+            if (!CAMPOS_EDITABLES_USUARIO.includes(key)) {
+                return res.status(403).json({ success: false, error: 'No tienes permiso para editar este campo' });
+            }
+            const [asignado] = await db.execute(
+                'SELECT 1 FROM estadisticos_genero_usuarios WHERE hoja_id = ? AND usuario_id = ? AND usuario_tipo = ? LIMIT 1',
+                [filas[0].hoja_id, req.user?.id, req.user?.tipo]
+            );
+            if (asignado.length === 0) {
+                return res.status(403).json({ success: false, error: 'No tienes acceso a esta hoja' });
+            }
+        }
+
         let valores;
         try {
             valores = typeof filas[0].valores === 'string' ? JSON.parse(filas[0].valores) : (filas[0].valores || {});
@@ -179,6 +197,102 @@ router.delete('/estadisticos-genero-filas/:id', requireSuperAdmin, async (req, r
     } catch (error) {
         console.error('Error al eliminar fila:', error);
         res.status(500).json({ success: false, error: 'Error al eliminar la fila' });
+    }
+});
+
+// ========== ASIGNACIÓN DE USUARIOS ==========
+
+router.get('/estadisticos-genero-usuarios-disponibles', async (req, res) => {
+    try {
+        const [directivos] = await db.execute('SELECT id, nombre_completo as nombre, direccion_id FROM directivos ORDER BY nombre_completo');
+        const [personal] = await db.execute('SELECT id, nombre_completo as nombre, direccion_id FROM personal ORDER BY nombre_completo');
+        const directivosConTipo = directivos.map(d => ({ ...d, tipo: 'directivo' }));
+        const personalConTipo = personal.map(p => ({ ...p, tipo: 'personal' }));
+        res.json({ success: true, data: [...directivosConTipo, ...personalConTipo] });
+    } catch (error) {
+        console.error('Error al obtener usuarios:', error);
+        res.status(500).json({ success: false, error: 'Error al obtener usuarios' });
+    }
+});
+
+router.get('/estadisticos-genero-hojas/:id/usuarios', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const [usuarios] = await db.execute(`
+            SELECT egu.id as asignacion_id, egu.usuario_id, egu.usuario_tipo,
+                   CASE WHEN egu.usuario_tipo = 'directivo' THEN d.nombre_completo
+                        WHEN egu.usuario_tipo = 'personal' THEN p.nombre_completo
+                   END as nombre
+            FROM estadisticos_genero_usuarios egu
+            LEFT JOIN directivos d ON egu.usuario_id = d.id AND egu.usuario_tipo = 'directivo'
+            LEFT JOIN personal p ON egu.usuario_id = p.id AND egu.usuario_tipo = 'personal'
+            WHERE egu.hoja_id = ?
+            ORDER BY nombre
+        `, [id]);
+        res.json({ success: true, data: usuarios });
+    } catch (error) {
+        console.error('Error al obtener usuarios asignados:', error);
+        res.status(500).json({ success: false, error: 'Error al obtener usuarios asignados' });
+    }
+});
+
+router.post('/estadisticos-genero-usuarios', requireSuperAdmin, async (req, res) => {
+    try {
+        const { hoja_id, usuario_id, usuario_tipo } = req.body;
+        if (!hoja_id || !usuario_id || !usuario_tipo) {
+            return res.status(400).json({ success: false, error: 'hoja_id, usuario_id y usuario_tipo son requeridos' });
+        }
+        if (!TIPOS_USUARIO_VALIDOS.includes(usuario_tipo)) {
+            return res.status(400).json({ success: false, error: 'Tipo de usuario inválido' });
+        }
+        await db.execute(
+            'INSERT INTO estadisticos_genero_usuarios (hoja_id, usuario_id, usuario_tipo) VALUES (?, ?, ?)',
+            [hoja_id, usuario_id, usuario_tipo]
+        );
+        res.status(201).json({ success: true, message: 'Usuario asignado' });
+        emit('estadisticos-genero:updated', { type: 'usuario:created' });
+    } catch (error) {
+        if (error.code === 'ER_DUP_ENTRY') {
+            return res.status(400).json({ success: false, error: 'El usuario ya está asignado' });
+        }
+        console.error('Error al asignar usuario:', error);
+        res.status(500).json({ success: false, error: 'Error al asignar usuario' });
+    }
+});
+
+router.delete('/estadisticos-genero-usuarios/:id', requireSuperAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const [result] = await db.execute('DELETE FROM estadisticos_genero_usuarios WHERE id = ?', [id]);
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, error: 'Asignación no encontrada' });
+        }
+        res.json({ success: true, message: 'Usuario quitado' });
+        emit('estadisticos-genero:updated', { type: 'usuario:deleted' });
+    } catch (error) {
+        console.error('Error al quitar usuario:', error);
+        res.status(500).json({ success: false, error: 'Error al quitar usuario' });
+    }
+});
+
+// ========== ACCESO PÚBLICO PARA USUARIOS ASIGNADOS ==========
+
+router.get('/estadisticos-genero-mis-hojas', async (req, res) => {
+    try {
+        const { usuario_id, usuario_tipo } = req.query;
+        if (!usuario_id || !usuario_tipo) {
+            return res.status(400).json({ success: false, error: 'usuario_id y usuario_tipo requeridos' });
+        }
+        const [rows] = await db.execute(`
+            SELECT eh.* FROM estadisticos_genero_hojas eh
+            INNER JOIN estadisticos_genero_usuarios egu ON egu.hoja_id = eh.id
+            WHERE egu.usuario_id = ? AND egu.usuario_tipo = ?
+            ORDER BY eh.anio DESC, eh.id DESC
+        `, [usuario_id, usuario_tipo]);
+        res.json({ success: true, data: rows });
+    } catch (error) {
+        console.error('Error al obtener hojas del usuario:', error);
+        res.status(500).json({ success: false, error: 'Error al obtener hojas del usuario' });
     }
 });
 
