@@ -9,7 +9,15 @@ const { emit } = require('../services/socketEmitter');
 
 router.get('/estadisticos-genero-hojas', async (req, res) => {
     try {
-        const [rows] = await db.execute('SELECT * FROM estadisticos_genero_hojas ORDER BY created_at DESC');
+        const { anio } = req.query;
+        let query = 'SELECT * FROM estadisticos_genero_hojas';
+        let params = [];
+        if (anio) {
+            query += ' WHERE anio = ?';
+            params.push(anio);
+        }
+        query += ' ORDER BY anio DESC, id DESC';
+        const [rows] = await db.execute(query, params);
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error al obtener hojas:', error);
@@ -17,13 +25,24 @@ router.get('/estadisticos-genero-hojas', async (req, res) => {
     }
 });
 
+router.get('/estadisticos-genero-hojas-anios', async (req, res) => {
+    try {
+        const [rows] = await db.execute('SELECT DISTINCT anio FROM estadisticos_genero_hojas WHERE anio IS NOT NULL AND anio != \'\' ORDER BY anio DESC');
+        const anios = rows.map(r => r.anio);
+        res.json({ success: true, data: anios });
+    } catch (error) {
+        console.error('Error al obtener años:', error);
+        res.status(500).json({ success: false, error: 'Error al obtener años' });
+    }
+});
+
 router.post('/estadisticos-genero-hojas', requireSuperAdmin, async (req, res) => {
     try {
-        sanitize(req.body, { nombre: sanitizeStr });
-        const { nombre } = req.body;
+        sanitize(req.body, { cuatrimestre: sanitizeStr, anio: sanitizeStr });
+        const { cuatrimestre, anio } = req.body;
         const [result] = await db.execute(
-            'INSERT INTO estadisticos_genero_hojas (nombre) VALUES (?)',
-            [nombre || '']
+            'INSERT INTO estadisticos_genero_hojas (cuatrimestre, anio) VALUES (?, ?)',
+            [cuatrimestre || '', anio || '']
         );
         const [rows] = await db.execute('SELECT * FROM estadisticos_genero_hojas WHERE id = ?', [result.insertId]);
         res.json({ success: true, data: rows[0] });
@@ -36,11 +55,11 @@ router.post('/estadisticos-genero-hojas', requireSuperAdmin, async (req, res) =>
 
 router.put('/estadisticos-genero-hojas/:id', requireSuperAdmin, async (req, res) => {
     try {
-        sanitize(req.body, { nombre: sanitizeStr });
-        const { nombre } = req.body;
+        sanitize(req.body, { cuatrimestre: sanitizeStr, anio: sanitizeStr });
+        const { cuatrimestre, anio } = req.body;
         await db.execute(
-            'UPDATE estadisticos_genero_hojas SET nombre = ? WHERE id = ?',
-            [nombre ?? '', req.params.id]
+            'UPDATE estadisticos_genero_hojas SET cuatrimestre = ?, anio = ? WHERE id = ?',
+            [cuatrimestre ?? '', anio ?? '', req.params.id]
         );
         const [rows] = await db.execute('SELECT * FROM estadisticos_genero_hojas WHERE id = ?', [req.params.id]);
         res.json({ success: true, data: rows[0] });
@@ -118,6 +137,33 @@ router.put('/estadisticos-genero-filas/:id', requireSuperAdmin, async (req, res)
     } catch (error) {
         console.error('Error al actualizar fila:', error);
         res.status(500).json({ success: false, error: 'Error al actualizar la fila' });
+    }
+});
+
+router.patch('/estadisticos-genero-filas/:id/celda', requireSuperAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { key, value } = req.body;
+        if (!key) {
+            return res.status(400).json({ success: false, error: 'key es requerido' });
+        }
+        const [filas] = await db.execute('SELECT * FROM estadisticos_genero_filas WHERE id = ?', [id]);
+        if (filas.length === 0) {
+            return res.status(404).json({ success: false, error: 'Fila no encontrada' });
+        }
+        let valores;
+        try {
+            valores = typeof filas[0].valores === 'string' ? JSON.parse(filas[0].valores) : (filas[0].valores || {});
+        } catch {
+            valores = {};
+        }
+        valores[key] = value ?? '';
+        await db.execute('UPDATE estadisticos_genero_filas SET valores = ? WHERE id = ?', [JSON.stringify(valores), id]);
+        res.json({ success: true, message: 'Celda actualizada' });
+        emit('estadisticos-genero:updated', { type: 'fila:celda-updated', id: parseInt(req.params.id) });
+    } catch (error) {
+        console.error('Error al actualizar celda:', error);
+        res.status(500).json({ success: false, error: 'Error al actualizar celda' });
     }
 });
 
