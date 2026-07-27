@@ -8,3 +8,6 @@ uploads/**
 !uploads/tareas/
 !uploads/personal/
 !uploads/logos/
+
+# Environment variables (contiene credenciales y secretos)
+.env
