@@ -4,6 +4,17 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 const helmet = require('helmet');
 require('dotenv').config();
+
+// Debug: verificar si las variables de entorno del panel llegan
+console.log('=== DEBUG ENV ===');
+console.log('DB_HOST:', process.env.DB_HOST || '❌ NO DEFINIDO');
+console.log('DB_USER:', process.env.DB_USER || '❌ NO DEFINIDO');
+console.log('DB_NAME:', process.env.DB_NAME || '❌ NO DEFINIDO');
+console.log('DB_PORT:', process.env.DB_PORT || '❌ NO DEFINIDO');
+console.log('PORT:', process.env.PORT || '❌ NO DEFINIDO');
+console.log('JWT_SECRET:', process.env.JWT_SECRET ? '✅ DEFINIDO' : '❌ NO DEFINIDO');
+console.log('=================');
+
 const path = require('path');
 const fs = require('fs');
 const { execSync } = require('child_process');
