@@ -5,7 +5,7 @@ const db = require('../config/database');
 const { generateToken, verifyToken } = require('../middleware/auth');
 const { sanitizeStr, sanitizeEmail, isValidEmail } = require('../utils/sanitize');
 const { loginLimiter, createUserLimiter } = require('../middleware/rateLimiters');
-const { requireSuperAdmin } = require('../middleware/roles');
+const { requireSuperAdmin, isUserDelegado } = require('../middleware/roles');
 const { emit } = require('../services/socketEmitter');
 
 router.post('/create-superuser', createUserLimiter, async (req, res) => {
@@ -121,8 +121,15 @@ router.post('/login-general', loginLimiter, async (req, res) => {
         if (!user) {
             return res.status(401).json({ success: false, error: 'Credenciales inválidas' });
         }
+        // Verificar si es delegado de superadmin
+        if (userType !== 'superadmin') {
+            const isDelegado = await isUserDelegado(user);
+            if (isDelegado) {
+                user.isDelegado = true;
+            }
+        }
         const token = generateToken(user);
-        console.log('✅ Login exitoso para:', user.email, 'Tipo:', userType);
+        console.log('✅ Login exitoso para:', user.email, 'Tipo:', userType, user.isDelegado ? '(Delegado)' : '');
         res.json({ success: true, message: 'Login exitoso', user: user, userType: userType, token });
     } catch (error) {
         console.error('Error en login general:', error);
@@ -148,6 +155,70 @@ router.get('/superusers', verifyToken, requireSuperAdmin, async (req, res) => {
     } catch (error) {
         console.error('Error al obtener usuarios:', error);
         res.status(500).json({ success: false, error: 'Error al obtener usuarios' });
+    }
+});
+
+// ========== SUPERADMIN DELEGADO ==========
+
+router.get('/superadmin-delegado', verifyToken, requireSuperAdmin, async (req, res) => {
+    try {
+        const [rows] = await db.execute(
+            `SELECT sd.id, sd.usuario_id, sd.usuario_tipo, sd.fecha_asignacion,
+                    COALESCE(d.nombre_completo, p.nombre_completo) as nombre
+             FROM superadmin_delegado sd
+             LEFT JOIN directivos d ON sd.usuario_id = d.id AND sd.usuario_tipo = 'directivo'
+             LEFT JOIN personal p ON sd.usuario_id = p.id AND sd.usuario_tipo = 'personal'
+             LIMIT 1`
+        );
+        res.json({ success: true, data: rows[0] || null });
+    } catch (error) {
+        console.error('Error al obtener delegado:', error);
+        res.status(500).json({ success: false, error: 'Error al obtener delegado' });
+    }
+});
+
+router.put('/superadmin-delegado', verifyToken, requireSuperAdmin, async (req, res) => {
+    try {
+        const { usuario_id, usuario_tipo } = req.body;
+        if (!usuario_id || !usuario_tipo) {
+            return res.status(400).json({ success: false, error: 'usuario_id y usuario_tipo son requeridos' });
+        }
+        if (!['directivo', 'personal'].includes(usuario_tipo)) {
+            return res.status(400).json({ success: false, error: 'usuario_tipo debe ser directivo o personal' });
+        }
+        // Limpiar delegado anterior y asignar nuevo
+        await db.execute('DELETE FROM superadmin_delegado');
+        await db.execute(
+            'INSERT INTO superadmin_delegado (usuario_id, usuario_tipo, asignado_por) VALUES (?, ?, ?)',
+            [usuario_id, usuario_tipo, req.user.id]
+        );
+        // Obtener nombre del delegado asignado
+        const table = usuario_tipo === 'directivo' ? 'directivos' : 'personal';
+        const field = usuario_tipo === 'directivo' ? 'nombre_completo' : 'nombre_completo';
+        const [userRows] = await db.execute(
+            `SELECT ${field} as nombre FROM ${table} WHERE id = ?`,
+            [usuario_id]
+        );
+        res.json({
+            success: true,
+            message: `Delegado asignado: ${userRows[0]?.nombre || 'Usuario'}`,
+            data: { usuario_id, usuario_tipo, nombre: userRows[0]?.nombre || '' }
+        });
+        emit('superadmin:delegado-changed', { usuario_id, usuario_tipo });
+    } catch (error) {
+        console.error('Error al asignar delegado:', error);
+        res.status(500).json({ success: false, error: 'Error al asignar delegado' });
+    }
+});
+
+router.delete('/superadmin-delegado', verifyToken, requireSuperAdmin, async (req, res) => {
+    try {
+        await db.execute('DELETE FROM superadmin_delegado');
+        res.json({ success: true, message: 'Delegado removido' });
+        emit('superadmin:delegado-changed', { usuario_id: null, usuario_tipo: null });
+    } catch (error) {
+        console.error('Error al remover delegado:', error);
+        res.status(500).json({ success: false, error: 'Error al remover delegado' });
     }
 });
 
