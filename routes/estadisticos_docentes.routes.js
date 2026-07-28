@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
-const { requireSuperAdmin, isUserDelegado } = require('../middleware/roles');
+const { requireSuperAdmin } = require('../middleware/roles');
 const { TIPOS_USUARIO_VALIDOS } = require('../utils/constants');
 const { sanitize, sanitizeStr } = require('../utils/sanitize');
 const { emit } = require('../services/socketEmitter');
@@ -175,7 +175,7 @@ router.patch('/estadisticos-docentes-filas/:id/celda', async (req, res) => {
         if (!key) return res.status(400).json({ success: false, error: 'key requerido' });
         const [filas] = await db.execute('SELECT * FROM estadisticos_docentes_filas WHERE id = ?', [id]);
         if (filas.length === 0) return res.status(404).json({ success: false, error: 'Fila no encontrada' });
-        const esSuperAdmin = req.user?.tipo === 'superadmin' || await isUserDelegado(req.user);
+        const esSuperAdmin = req.user?.tipo === 'superadmin';
         if (!esSuperAdmin) {
             const [s] = await db.execute('SELECT carrera_id FROM estadisticos_docentes_secciones WHERE id = ?', [filas[0].seccion_id]);
             if (s.length === 0) return res.status(404).json({ success: false, error: 'Sección no encontrada' });
