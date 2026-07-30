@@ -52,6 +52,12 @@ router.get('/smoa-editor-images/:filename', (req, res) => {
     }
 });
 
+const DEFAULT_AVATAR_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <circle cx="50" cy="50" r="50" fill="#e0e0e0"/>
+  <circle cx="50" cy="38" r="18" fill="#b0b0b0"/>
+  <path d="M22 82c0-15.5 12.5-28 28-28s28 12.5 28 28" fill="#b0b0b0"/>
+</svg>`;
+
 router.get('/personal/foto/:filename', (req, res) => {
     try {
         const { filename } = req.params;
@@ -59,12 +65,9 @@ router.get('/personal/foto/:filename', (req, res) => {
         if (fs.existsSync(filePath)) {
             res.sendFile(path.resolve(filePath));
         } else {
-            const defaultAvatar = path.join(__dirname, '../public/default-avatar.png');
-            if (fs.existsSync(defaultAvatar)) {
-                res.sendFile(defaultAvatar);
-            } else {
-                res.status(404).json({ error: 'Foto no encontrada' });
-            }
+            res.set('Content-Type', 'image/svg+xml');
+            res.set('Cache-Control', 'public, max-age=86400');
+            res.send(DEFAULT_AVATAR_SVG);
         }
     } catch (error) {
         console.error('Error al servir foto:', error);

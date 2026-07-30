@@ -19,7 +19,7 @@ router.get('/personal', async (req, res) => {
         const personalConFotos = personal.map(persona => {
             const fotoUrl = persona.foto_perfil
                 ? `http://strideutmat.com:5000/api/university/personal/foto/${persona.foto_perfil}`
-                : `http://strideutmat.com:5000/api/university/personal/foto/default-avatar.png`;
+                : null;
             return { ...persona, foto_url: fotoUrl };
         });
         res.json({ success: true, data: personalConFotos, metadata: { total: personalConFotos.length, conFoto: personal.filter(p => p.foto_perfil).length, sinFoto: personal.filter(p => !p.foto_perfil).length } });
