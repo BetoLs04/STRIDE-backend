@@ -103,6 +103,14 @@ router.put('/personal/:id', requireSuperAdmin, uploadPersonal.single('foto'), as
         }
         const persona = personalActual[0];
         let nuevaFoto = persona.foto_perfil;
+        const removeFoto = req.body.removeFoto === 'true' || req.body.removeFoto === true;
+        if (removeFoto) {
+            if (persona.foto_perfil) {
+                const fotoAnterior = path.join('uploads/personal', persona.foto_perfil);
+                if (fs.existsSync(fotoAnterior)) { fs.unlinkSync(fotoAnterior); }
+            }
+            nuevaFoto = null;
+        }
         if (req.file) {
             if (persona.foto_perfil) {
                 const fotoAnterior = path.join('uploads/personal', persona.foto_perfil);
