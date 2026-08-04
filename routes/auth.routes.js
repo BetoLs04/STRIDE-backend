@@ -10,6 +10,12 @@ const { emit } = require('../services/socketEmitter');
 
 router.post('/create-superuser', createUserLimiter, async (req, res) => {
     try {
+        // Solo permitir crear el PRIMER superadmin sin auth
+        const [existing] = await db.execute('SELECT COUNT(*) as total FROM super_users');
+        if (existing[0].total > 0) {
+            return res.status(403).json({ success: false, error: 'Ya existe un superadmin. Usa el panel administrativo para crear más.' });
+        }
+
         const username = sanitizeStr(req.body.username);
         const email = sanitizeEmail(req.body.email);
         const password = req.body.password || '';

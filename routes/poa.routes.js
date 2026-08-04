@@ -214,7 +214,7 @@ router.get('/poa-filas/:seccionId', async (req, res) => {
     }
 });
 
-router.post('/poa-filas', async (req, res) => {
+router.post('/poa-filas', requireSuperAdmin, async (req, res) => {
     try {
         const { seccion_id, valores } = req.body;
         if (!seccion_id) {
@@ -233,7 +233,7 @@ router.post('/poa-filas', async (req, res) => {
     }
 });
 
-router.put('/poa-filas/:id', async (req, res) => {
+router.put('/poa-filas/:id', requireSuperAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const { valores } = req.body;
@@ -253,7 +253,7 @@ router.put('/poa-filas/:id', async (req, res) => {
     }
 });
 
-router.delete('/poa-filas/:id', async (req, res) => {
+router.delete('/poa-filas/:id', requireSuperAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const [result] = await db.execute('DELETE FROM poa_filas WHERE id = ?', [id]);

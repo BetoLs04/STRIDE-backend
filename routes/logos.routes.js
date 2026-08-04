@@ -13,17 +13,28 @@ router.post('/upload-logo', requireSuperAdmin, async (req, res) => {
       return res.status(400).json({ success: false, error: 'Content-Type debe ser multipart/form-data' });
     }
     const busboy = require('busboy');
-    const bb = busboy({ headers: req.headers });
+    const bb = busboy({ headers: req.headers, limits: { fileSize: 5 * 1024 * 1024, files: 1 } });
     let fileName = '';
     let fileBuffer = Buffer.from('');
+    let fileTruncated = false;
     bb.on('file', (name, file, info) => {
+      const ext = path.extname(info.filename).toLowerCase();
+      const allowedExts = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+      if (!allowedExts.includes(ext)) {
+        file.resume();
+        return res.status(400).json({ success: false, error: 'Solo se permiten imágenes (jpg, png, gif, webp)' });
+      }
       console.log(`📄 Archivo recibido: ${info.filename}`);
       fileName = info.filename;
       const chunks = [];
       file.on('data', (data) => { chunks.push(data); });
+      file.on('limit', () => { fileTruncated = true; });
       file.on('end', () => { fileBuffer = Buffer.concat(chunks); });
     });
     bb.on('close', async () => {
+      if (fileTruncated) {
+        return res.status(400).json({ success: false, error: 'El archivo no puede superar los 5MB' });
+      }
       if (!fileBuffer.length || !fileName) {
         return res.status(400).json({ success: false, error: 'No se recibió ningún archivo' });
       }

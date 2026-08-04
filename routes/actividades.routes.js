@@ -77,8 +77,9 @@ router.put('/actividades/:id/estado', requireRole('superadmin', 'personal'), asy
 router.put('/actividades/:id', requireRole('superadmin', 'personal'), uploadActividades.array('imagenes', 5), async (req, res) => {
     try {
         const { id } = req.params;
+        const currentUser = req.user;
         sanitize(req.body, { titulo: sanitizeStr, descripcion: sanitizeStr, tipo_actividad: sanitizeStr });
-        const { titulo, descripcion, tipo_actividad, fecha_inicio, fecha_fin, creado_por_id } = req.body;
+        const { titulo, descripcion, tipo_actividad, fecha_inicio, fecha_fin } = req.body;
         console.log('✏️ Editando actividad ID:', id);
         if (!titulo || !tipo_actividad || !fecha_inicio) {
             if (req.files && req.files.length > 0) {
@@ -94,7 +95,9 @@ router.put('/actividades/:id', requireRole('superadmin', 'personal'), uploadActi
             return res.status(404).json({ success: false, error: 'Actividad no encontrada' });
         }
         const actividad = actividades[0];
-        if (String(actividad.creado_por_id) !== String(creado_por_id)) {
+        const esOwner = String(actividad.creado_por_id) === String(currentUser.id) && actividad.creado_por_tipo === currentUser.tipo;
+        const esSuperAdmin = currentUser.tipo === 'superadmin';
+        if (!esOwner && !esSuperAdmin) {
             if (req.files && req.files.length > 0) {
                 req.files.forEach(file => { try { fs.unlinkSync(file.path); } catch (err) {} });
             }
@@ -151,17 +154,19 @@ router.put('/actividades/:id', requireRole('superadmin', 'personal'), uploadActi
 router.delete('/actividades/imagen/:imagenId', requireRole('superadmin', 'personal'), async (req, res) => {
     try {
         const { imagenId } = req.params;
-        const { creado_por_id } = req.body;
+        const currentUser = req.user;
         console.log('🗑️ Eliminando imagen ID:', imagenId);
         const [imagenes] = await db.execute(
-            'SELECT ai.*, a.creado_por_id FROM actividad_imagenes ai INNER JOIN actividades a ON ai.actividad_id = a.id WHERE ai.id = ?',
+            'SELECT ai.*, a.creado_por_id, a.creado_por_tipo FROM actividad_imagenes ai INNER JOIN actividades a ON ai.actividad_id = a.id WHERE ai.id = ?',
             [imagenId]
         );
         if (imagenes.length === 0) {
             return res.status(404).json({ success: false, error: 'Imagen no encontrada' });
         }
         const imagen = imagenes[0];
-        if (creado_por_id && String(imagen.creado_por_id) !== String(creado_por_id)) {
+        const esOwner = String(imagen.creado_por_id) === String(currentUser.id) && imagen.creado_por_tipo === currentUser.tipo;
+        const esSuperAdmin = currentUser.tipo === 'superadmin';
+        if (!esOwner && !esSuperAdmin) {
             return res.status(403).json({ success: false, error: 'No tienes permiso para eliminar esta imagen' });
         }
         const filePath = path.join(uploadDir, imagen.ruta_archivo);

@@ -4,18 +4,32 @@ const path = require('path');
 const fs = require('fs');
 const db = require('../config/database');
 const { verifyToken } = require('../middleware/auth');
-const { smoaDir, smoaColDir, smoaEditorImgDir } = require('../middleware/upload');
+const { smoaDir, smoaColDir, smoaEditorImgDir, personalDir, tareasDir } = require('../middleware/upload');
+
+// Helper: prevenir path traversal
+function safeFilename(filename) {
+    if (!filename || typeof filename !== 'string') return null;
+    const cleaned = path.basename(filename);
+    if (cleaned === '.' || cleaned === '..' || cleaned.includes('\0') || !/^[a-zA-Z0-9._-]+$/.test(cleaned)) return null;
+    return cleaned;
+}
+
+function safePath(baseDir, filename) {
+    const safe = safeFilename(filename);
+    if (!safe) return null;
+    const resolved = path.join(baseDir, safe);
+    if (!resolved.startsWith(path.resolve(baseDir))) return null;
+    return resolved;
+}
 
 // Rutas públicas (sin auth)
 router.get('/smoa-uploads/:filename', (req, res) => {
     try {
-        const { filename } = req.params;
-        const filePath = path.join(smoaDir, filename);
-        if (fs.existsSync(filePath)) {
-            res.download(filePath, filename);
-        } else {
-            res.status(404).json({ error: 'Archivo no encontrado' });
+        const filePath = safePath(smoaDir, req.params.filename);
+        if (!filePath || !fs.existsSync(filePath)) {
+            return res.status(404).json({ error: 'Archivo no encontrado' });
         }
+        res.download(filePath, path.basename(filePath));
     } catch (error) {
         console.error('Error al servir archivo SMOA:', error);
         res.status(500).json({ error: 'Error al cargar el archivo' });
@@ -24,13 +38,11 @@ router.get('/smoa-uploads/:filename', (req, res) => {
 
 router.get('/smoa-uploads/col/:filename', (req, res) => {
     try {
-        const { filename } = req.params;
-        const filePath = path.join(smoaColDir, filename);
-        if (fs.existsSync(filePath)) {
-            res.download(filePath, filename);
-        } else {
-            res.status(404).json({ error: 'Archivo no encontrado' });
+        const filePath = safePath(smoaColDir, req.params.filename);
+        if (!filePath || !fs.existsSync(filePath)) {
+            return res.status(404).json({ error: 'Archivo no encontrado' });
         }
+        res.download(filePath, path.basename(filePath));
     } catch (error) {
         console.error('Error al servir archivo columna SMOA:', error);
         res.status(500).json({ error: 'Error al cargar el archivo' });
@@ -39,13 +51,11 @@ router.get('/smoa-uploads/col/:filename', (req, res) => {
 
 router.get('/smoa-editor-images/:filename', (req, res) => {
     try {
-        const { filename } = req.params;
-        const filePath = path.resolve(smoaEditorImgDir, filename);
-        if (fs.existsSync(filePath)) {
-            res.sendFile(filePath);
-        } else {
-            res.status(404).json({ error: 'Imagen no encontrada' });
+        const filePath = safePath(smoaEditorImgDir, req.params.filename);
+        if (!filePath || !fs.existsSync(filePath)) {
+            return res.status(404).json({ error: 'Imagen no encontrada' });
         }
+        res.sendFile(filePath);
     } catch (error) {
         console.error('Error al servir imagen:', error);
         res.status(500).json({ error: 'Error al cargar la imagen' });
@@ -60,53 +70,26 @@ const DEFAULT_AVATAR_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0
 
 router.get('/personal/foto/:filename', (req, res) => {
     try {
-        const { filename } = req.params;
-        const filePath = path.join('uploads/personal', filename);
-        if (fs.existsSync(filePath)) {
-            res.sendFile(path.resolve(filePath));
-        } else {
-            res.set('Content-Type', 'image/svg+xml');
-            res.set('Cache-Control', 'public, max-age=86400');
-            res.send(DEFAULT_AVATAR_SVG);
+        const filePath = safePath(personalDir, req.params.filename);
+        if (filePath && fs.existsSync(filePath)) {
+            return res.sendFile(filePath);
         }
+        res.set('Content-Type', 'image/svg+xml');
+        res.set('Cache-Control', 'public, max-age=86400');
+        res.send(DEFAULT_AVATAR_SVG);
     } catch (error) {
         console.error('Error al servir foto:', error);
         res.status(500).json({ error: 'Error al cargar la foto' });
     }
 });
 
-router.get('/personal/debug-fotos', async (req, res) => {
-    try {
-        const dir = 'uploads/personal';
-        if (!fs.existsSync(dir)) {
-            return res.json({ success: false, message: 'Directorio uploads/personal no existe' });
-        }
-        const files = fs.readdirSync(dir);
-        res.json({ success: true, archivos: files, ruta: path.resolve(dir) });
-    } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-router.get('/debug/uploads', (req, res) => {
-    const uploadsPath = path.join(__dirname, '../uploads');
-    if (!fs.existsSync(uploadsPath)) {
-        return res.json({ exists: false, path: uploadsPath });
-    }
-    const items = fs.readdirSync(uploadsPath).map(item => {
-        const itemPath = path.join(uploadsPath, item);
-        const stat = fs.statSync(itemPath);
-        return { nombre: item, esDirectorio: stat.isDirectory(), tamaño: stat.size };
-    });
-    res.json({ exists: true, path: path.resolve(uploadsPath), contenido: items });
-});
-
 router.get('/tareas/archivo/:filename', (req, res) => {
     try {
-        const { filename } = req.params;
-        const filePath = path.join('uploads/tareas', filename);
-        if (fs.existsSync(filePath)) { res.sendFile(path.resolve(filePath)); }
-        else { res.status(404).json({ error: 'Archivo no encontrado' }); }
+        const filePath = safePath(tareasDir, req.params.filename);
+        if (!filePath || !fs.existsSync(filePath)) {
+            return res.status(404).json({ error: 'Archivo no encontrado' });
+        }
+        res.sendFile(filePath);
     } catch (error) {
         console.error('Error al servir archivo:', error);
         res.status(500).json({ error: 'Error al cargar el archivo' });

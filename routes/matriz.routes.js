@@ -352,7 +352,7 @@ router.get('/matriz-filas/:seccionId', async (req, res) => {
     }
 });
 
-router.post('/matriz-filas', async (req, res) => {
+router.post('/matriz-filas', requireSuperAdmin, async (req, res) => {
     try {
         const { seccion_id, direccion_id, valores } = req.body;
         if (!seccion_id) {
@@ -371,7 +371,7 @@ router.post('/matriz-filas', async (req, res) => {
     }
 });
 
-router.put('/matriz-filas/:id', async (req, res) => {
+router.put('/matriz-filas/:id', requireSuperAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const { valores } = req.body;
@@ -391,7 +391,7 @@ router.put('/matriz-filas/:id', async (req, res) => {
     }
 });
 
-router.delete('/matriz-filas/:id', async (req, res) => {
+router.delete('/matriz-filas/:id', requireSuperAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const [result] = await db.execute('DELETE FROM matriz_filas WHERE id = ?', [id]);

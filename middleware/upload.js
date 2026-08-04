@@ -155,11 +155,11 @@ const uploadSmoaEditorImg = multer({
     storage: smoaEditorStorage,
     fileFilter: (req, file, cb) => {
         const ext = path.extname(file.originalname).toLowerCase();
-        const allowed = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'];
+        const allowed = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
         if (allowed.includes(ext)) {
             cb(null, true);
         } else {
-            cb(new Error('Solo se permiten imágenes (jpg, png, gif, webp, svg)'), false);
+            cb(new Error('Solo se permiten imágenes (jpg, png, gif, webp)'), false);
         }
     },
     limits: { fileSize: 10 * 1024 * 1024 }

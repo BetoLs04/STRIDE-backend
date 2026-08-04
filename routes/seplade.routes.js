@@ -238,7 +238,7 @@ router.put('/seplade-notas/:indicador_id/:mes', async (req, res) => {
 
 // ========== VALORES ==========
 
-router.put('/seplade-valores/:indicador_id', async (req, res) => {
+router.put('/seplade-valores/:indicador_id', requireSuperAdmin, async (req, res) => {
     try {
         const { mes, tipo, valor } = req.body;
         if (!mes || !tipo) {
