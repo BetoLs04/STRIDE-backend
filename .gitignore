@@ -8,6 +8,10 @@ uploads/**
 !uploads/tareas/
 !uploads/personal/
 !uploads/logos/
+!uploads/comunicados/
+!uploads/smoa/
+!uploads/smoa/columnas/
+!uploads/smoa-editor/
 
 # Environment variables (contiene credenciales y secretos)
 .env

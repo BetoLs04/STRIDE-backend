@@ -2,15 +2,16 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-// Directorios de subida
-const uploadDir = 'uploads/actividades';
-const personalDir = 'uploads/personal';
-const comunicadosDir = 'uploads/comunicados';
-const tareasDir = 'uploads/tareas';
-const smoaDir = 'uploads/smoa';
-const smoaColDir = 'uploads/smoa/columnas';
-const smoaEditorImgDir = 'uploads/smoa-editor';
-const logoDir = 'uploads/logos';
+// Directorios de subida (absolutos para evitar problemas con CWD)
+const BASE_UPLOADS = path.join(__dirname, '..', 'uploads');
+const uploadDir = path.join(BASE_UPLOADS, 'actividades');
+const personalDir = path.join(BASE_UPLOADS, 'personal');
+const comunicadosDir = path.join(BASE_UPLOADS, 'comunicados');
+const tareasDir = path.join(BASE_UPLOADS, 'tareas');
+const smoaDir = path.join(BASE_UPLOADS, 'smoa');
+const smoaColDir = path.join(BASE_UPLOADS, 'smoa', 'columnas');
+const smoaEditorImgDir = path.join(BASE_UPLOADS, 'smoa-editor');
+const logoDir = path.join(BASE_UPLOADS, 'logos');
 
 // Asegurar directorios
 [uploadDir, personalDir, comunicadosDir, tareasDir, smoaDir, smoaColDir, smoaEditorImgDir, logoDir].forEach(dir => {

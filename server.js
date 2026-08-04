@@ -40,6 +40,26 @@ const poaRoutes = require('./routes/poa.routes');
 const estadisticosGeneroRoutes = require('./routes/estadisticos_genero.routes');
 const estadisticosDocentesRoutes = require('./routes/estadisticos_docentes.routes');
 
+// ========== ENSURE UPLOAD DIRECTORIES ==========
+const uploadsBase = path.join(__dirname, 'uploads');
+const uploadDirs = [
+    uploadsBase,
+    path.join(uploadsBase, 'actividades'),
+    path.join(uploadsBase, 'tareas'),
+    path.join(uploadsBase, 'personal'),
+    path.join(uploadsBase, 'logos'),
+    path.join(uploadsBase, 'comunicados'),
+    path.join(uploadsBase, 'smoa'),
+    path.join(uploadsBase, 'smoa', 'columnas'),
+    path.join(uploadsBase, 'smoa-editor')
+];
+uploadDirs.forEach(dir => {
+    if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+        console.log(`📁 Directorio creado: ${dir}`);
+    }
+});
+
 // ========== MIGRATIONS ==========
 async function runMigrations() {
     try {
@@ -218,12 +238,16 @@ io.on('connection', (socket) => {
 
 // Ruta de prueba
 app.get('/', (req, res) => {
+    const uploadsPath = path.join(__dirname, 'uploads');
+    const uploadsExists = fs.existsSync(uploadsPath);
+    const isSymlink = uploadsExists ? fs.lstatSync(uploadsPath).isSymbolicLink() : false;
     res.json({ 
         message: 'API Sistema Universitario STRIDE',
         timestamp: new Date().toISOString(),
         version: '1.0.0',
-        uploadsPath: path.join(__dirname, 'uploads'),
-        isSymlink: fs.lstatSync(path.join(__dirname, 'uploads')).isSymbolicLink()
+        uploadsPath,
+        uploadsExists,
+        isSymlink
     });
 });
 
@@ -247,12 +271,14 @@ app.get('/check-uploads', (req, res) => {
             url: `https://api1.strideutmat.com/uploads/actividades/${file}`
         };
     });
+    const uploadsPathRoot = path.join(__dirname, 'uploads');
+    const isSymlink = fs.existsSync(uploadsPathRoot) ? fs.lstatSync(uploadsPathRoot).isSymbolicLink() : false;
     res.json({
         success: true,
         totalArchivos: files.length,
         archivos: fileDetails,
         uploadsUrl: `https://api1.strideutmat.com/uploads/actividades/`,
-        isSymlink: fs.lstatSync(path.join(__dirname, 'uploads')).isSymbolicLink()
+        isSymlink
     });
 });
 
@@ -260,7 +286,8 @@ runMigrations().then(() => {
     server.listen(PORT, () => {
     console.log(`🎓 Sistema Universitario corriendo en puerto ${PORT}`);
     console.log(`📁 Servidor de archivos en: https://api1.strideutmat.com/uploads/`);
-    console.log(`📂 Ruta física: ${path.join(__dirname, 'uploads')}`);
-    console.log(`🔗 Es symlink: ${fs.lstatSync(path.join(__dirname, 'uploads')).isSymbolicLink()}`);
+    const uploadsPathLog = path.join(__dirname, 'uploads');
+    console.log(`📂 Ruta física: ${uploadsPathLog}`);
+    console.log(`🔗 Es symlink: ${fs.existsSync(uploadsPathLog) ? fs.lstatSync(uploadsPathLog).isSymbolicLink() : 'directorio no encontrado'}`);
     });
 });
