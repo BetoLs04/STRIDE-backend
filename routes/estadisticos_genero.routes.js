@@ -176,6 +176,16 @@ router.patch('/estadisticos-genero-filas/:id/celda', async (req, res) => {
             valores = {};
         }
         valores[key] = value ?? '';
+
+        const parseNum = (v) => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
+        const round2 = (v) => { const n = parseFloat(v); return isNaN(n) ? v : n.toFixed(2); };
+        const h = parseNum(valores.cant_hombres);
+        const m = parseNum(valores.cant_mujeres);
+        valores.cant_total = String(h + m);
+        const ah = parseNum(valores.aprov_hombres);
+        const am = parseNum(valores.aprov_mujeres);
+        valores.aprov_total = (ah + am) > 0 ? round2((ah + am) / 2) : '';
+
         await db.execute('UPDATE estadisticos_genero_filas SET valores = ? WHERE id = ?', [JSON.stringify(valores), id]);
         res.json({ success: true, message: 'Celda actualizada' });
         emit('estadisticos-genero:updated', { type: 'fila:celda-updated', id: parseInt(req.params.id) });
