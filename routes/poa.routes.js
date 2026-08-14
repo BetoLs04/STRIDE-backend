@@ -233,10 +233,47 @@ router.post('/poa-filas', requireSuperAdmin, async (req, res) => {
     }
 });
 
-router.put('/poa-filas/:id', requireSuperAdmin, async (req, res) => {
+router.put('/poa-filas/:id', async (req, res) => {
     try {
+        const { tipo: userTipo, id: userId } = req.user;
         const { id } = req.params;
         const { valores } = req.body;
+
+        const isSuperAdmin = userTipo === 'superadmin';
+
+        if (!isSuperAdmin) {
+            const [fila] = await db.execute('SELECT seccion_id FROM poa_filas WHERE id = ?', [id]);
+            if (fila.length === 0) {
+                return res.status(404).json({ success: false, error: 'Fila no encontrada' });
+            }
+            const [existe] = await db.execute(
+                'SELECT 1 FROM poa_seccion_usuarios WHERE seccion_id = ? AND usuario_id = ? AND usuario_tipo = ?',
+                [fila[0].seccion_id, userId, userTipo]
+            );
+            if (existe.length === 0) {
+                return res.status(403).json({ success: false, error: 'No estás asignado a esta sección' });
+            }
+            const [filaActual] = await db.execute('SELECT valores FROM poa_filas WHERE id = ?', [id]);
+            const valoresActuales = JSON.parse(filaActual[0].valores || '{}');
+            const valoresFiltrados = { ...valoresActuales };
+            for (const key of Object.keys(valores || {})) {
+                if (key.includes('_alc_') || (key.startsWith('_nota_') && key.includes('_alc_'))) {
+                    valoresFiltrados[key] = valores[key];
+                }
+            }
+            const [result] = await db.execute(
+                'UPDATE poa_filas SET valores = ? WHERE id = ?',
+                [JSON.stringify(valoresFiltrados), id]
+            );
+            if (result.affectedRows === 0) {
+                return res.status(404).json({ success: false, error: 'Fila no encontrada' });
+            }
+            const [updated] = await db.execute('SELECT * FROM poa_filas WHERE id = ?', [id]);
+            res.json({ success: true, data: updated[0], message: 'Fila actualizada' });
+            emit('poa:updated', { type: 'fila:updated', id: parseInt(req.params.id) });
+            return;
+        }
+
         const [result] = await db.execute(
             'UPDATE poa_filas SET valores = ? WHERE id = ?',
             [JSON.stringify(valores || {}), id]

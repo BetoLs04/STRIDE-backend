@@ -352,12 +352,31 @@ router.get('/matriz-filas/:seccionId', async (req, res) => {
     }
 });
 
-router.post('/matriz-filas', requireSuperAdmin, async (req, res) => {
+router.post('/matriz-filas', async (req, res) => {
     try {
+        const { tipo: userTipo, id: userId } = req.user;
         const { seccion_id, direccion_id, valores } = req.body;
         if (!seccion_id) {
             return res.status(400).json({ success: false, error: 'La sección es requerida' });
         }
+
+        const isSuperAdmin = userTipo === 'superadmin';
+
+        if (!isSuperAdmin) {
+            const [existe] = await db.execute(
+                'SELECT 1 FROM matriz_seccion_usuarios WHERE seccion_id = ? AND usuario_id = ? AND usuario_tipo = ?',
+                [seccion_id, userId, userTipo]
+            );
+            if (existe.length === 0) {
+                return res.status(403).json({ success: false, error: 'No estás asignado a esta sección' });
+            }
+
+            let [encabezado] = await db.execute('SELECT bloqueo_filas FROM matriz_encabezado LIMIT 1');
+            if (encabezado.length > 0 && encabezado[0].bloqueo_filas) {
+                return res.status(403).json({ success: false, error: 'La creación de filas está bloqueada' });
+            }
+        }
+
         const [result] = await db.execute(
             'INSERT INTO matriz_filas (seccion_id, direccion_id, valores) VALUES (?, ?, ?)',
             [seccion_id, direccion_id || null, JSON.stringify(valores || {})]
@@ -371,10 +390,66 @@ router.post('/matriz-filas', requireSuperAdmin, async (req, res) => {
     }
 });
 
-router.put('/matriz-filas/:id', requireSuperAdmin, async (req, res) => {
+router.put('/matriz-filas/:id', async (req, res) => {
     try {
+        const { tipo: userTipo, id: userId } = req.user;
         const { id } = req.params;
         const { valores } = req.body;
+
+        const isSuperAdmin = userTipo === 'superadmin';
+
+        if (!isSuperAdmin) {
+            const [fila] = await db.execute('SELECT seccion_id FROM matriz_filas WHERE id = ?', [id]);
+            if (fila.length === 0) {
+                return res.status(404).json({ success: false, error: 'Fila no encontrada' });
+            }
+            const [existe] = await db.execute(
+                'SELECT 1 FROM matriz_seccion_usuarios WHERE seccion_id = ? AND usuario_id = ? AND usuario_tipo = ?',
+                [fila[0].seccion_id, userId, userTipo]
+            );
+            if (existe.length === 0) {
+                return res.status(403).json({ success: false, error: 'No estás asignado a esta sección' });
+            }
+
+            const [columnas] = await db.execute('SELECT id, bloqueada FROM matriz_columnas');
+            let [encabezado] = await db.execute('SELECT bloqueo_1er_cuatrimestre, bloqueo_2do_cuatrimestre, bloqueo_3er_cuatrimestre FROM matriz_encabezado LIMIT 1');
+            const enc = encabezado.length > 0 ? encabezado[0] : {};
+            const bloqueosCuatri = [enc.bloqueo_1er_cuatrimestre, enc.bloqueo_2do_cuatrimestre, enc.bloqueo_3er_cuatrimestre];
+
+            const [filaActual] = await db.execute('SELECT valores FROM matriz_filas WHERE id = ?', [id]);
+            const valoresActuales = JSON.parse(filaActual[0].valores || '{}');
+            const valoresFiltrados = { ...valoresActuales };
+
+            for (const key of Object.keys(valores || {})) {
+                if (key.startsWith('d_')) {
+                    const colId = parseInt(key.replace('d_', ''));
+                    const col = columnas.find(c => c.id === colId);
+                    if (col && !col.bloqueada) {
+                        valoresFiltrados[key] = valores[key];
+                    }
+                } else if (key.startsWith('f_')) {
+                    const idx = parseInt(key.replace('f_', ''));
+                    if (idx >= 0 && idx <= 2) {
+                        if (!bloqueosCuatri[idx]) {
+                            valoresFiltrados[key] = valores[key];
+                        }
+                    }
+                }
+            }
+
+            const [result] = await db.execute(
+                'UPDATE matriz_filas SET valores = ? WHERE id = ?',
+                [JSON.stringify(valoresFiltrados), id]
+            );
+            if (result.affectedRows === 0) {
+                return res.status(404).json({ success: false, error: 'Fila no encontrada' });
+            }
+            const [updated] = await db.execute('SELECT * FROM matriz_filas WHERE id = ?', [id]);
+            res.json({ success: true, data: updated[0], message: 'Fila actualizada' });
+            emit('matriz:updated', { type: 'fila:updated', id: parseInt(req.params.id) });
+            return;
+        }
+
         const [result] = await db.execute(
             'UPDATE matriz_filas SET valores = ? WHERE id = ?',
             [JSON.stringify(valores || {}), id]
@@ -391,9 +466,32 @@ router.put('/matriz-filas/:id', requireSuperAdmin, async (req, res) => {
     }
 });
 
-router.delete('/matriz-filas/:id', requireSuperAdmin, async (req, res) => {
+router.delete('/matriz-filas/:id', async (req, res) => {
     try {
+        const { tipo: userTipo, id: userId } = req.user;
         const { id } = req.params;
+
+        const isSuperAdmin = userTipo === 'superadmin';
+
+        if (!isSuperAdmin) {
+            const [fila] = await db.execute('SELECT seccion_id FROM matriz_filas WHERE id = ?', [id]);
+            if (fila.length === 0) {
+                return res.status(404).json({ success: false, error: 'Fila no encontrada' });
+            }
+            const [existe] = await db.execute(
+                'SELECT 1 FROM matriz_seccion_usuarios WHERE seccion_id = ? AND usuario_id = ? AND usuario_tipo = ?',
+                [fila[0].seccion_id, userId, userTipo]
+            );
+            if (existe.length === 0) {
+                return res.status(403).json({ success: false, error: 'No estás asignado a esta sección' });
+            }
+
+            let [encabezado] = await db.execute('SELECT bloqueo_filas FROM matriz_encabezado LIMIT 1');
+            if (encabezado.length > 0 && encabezado[0].bloqueo_filas) {
+                return res.status(403).json({ success: false, error: 'La eliminación de filas está bloqueada' });
+            }
+        }
+
         const [result] = await db.execute('DELETE FROM matriz_filas WHERE id = ?', [id]);
         if (result.affectedRows === 0) {
             return res.status(404).json({ success: false, error: 'Fila no encontrada' });

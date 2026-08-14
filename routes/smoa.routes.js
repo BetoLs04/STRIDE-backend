@@ -259,7 +259,7 @@ router.delete('/smoa-filas/:id', requireSuperAdmin, async (req, res) => {
 
 // ========== PPTX POR FILA ==========
 
-router.put('/smoa-filas/:id/pptx', requireSuperAdmin, (req, res, next) => {
+router.put('/smoa-filas/:id/pptx', (req, res, next) => {
     const contentType = req.headers['content-type'] || '';
     if (contentType.includes('multipart/form-data')) {
         uploadSmoa.single('pptx')(req, res, (err) => {
@@ -276,7 +276,34 @@ router.put('/smoa-filas/:id/pptx', requireSuperAdmin, (req, res, next) => {
     }
 }, async (req, res) => {
     try {
+        const { tipo: userTipo, id: userId } = req.user;
         const { id } = req.params;
+
+        const isSuperAdmin = userTipo === 'superadmin';
+
+        if (!isSuperAdmin) {
+            const [asignado] = await db.execute(
+                'SELECT 1 FROM smoa_usuarios WHERE usuario_id = ? AND usuario_tipo = ?',
+                [userId, userTipo]
+            );
+            if (asignado.length === 0) {
+                return res.status(403).json({ success: false, error: 'No estás asignado al SMOA' });
+            }
+
+            const esEliminacion = req.body && (req.body.eliminar === true || req.body.eliminar === 'true');
+            const campoPermiso = esEliminacion ? 'puede_eliminar' : (req.file ? 'puede_subir' : null);
+
+            if (campoPermiso) {
+                const [tienePermiso] = await db.execute(
+                    `SELECT 1 FROM smoa_permisos_pptx WHERE fila_id = ? AND usuario_id = ? AND usuario_tipo = ? AND ${campoPermiso} = 1`,
+                    [id, userId, userTipo]
+                );
+                if (tienePermiso.length === 0) {
+                    return res.status(403).json({ success: false, error: 'No tienes permiso para esta acción' });
+                }
+            }
+        }
+
         const [filas] = await db.execute('SELECT * FROM smoa_filas WHERE id = ?', [id]);
         if (filas.length === 0) {
             return res.status(404).json({ success: false, error: 'Fila no encontrada' });

@@ -238,12 +238,29 @@ router.put('/seplade-notas/:indicador_id/:mes', async (req, res) => {
 
 // ========== VALORES ==========
 
-router.put('/seplade-valores/:indicador_id', requireSuperAdmin, async (req, res) => {
+router.put('/seplade-valores/:indicador_id', async (req, res) => {
     try {
+        const { tipo: userTipo, id: userId } = req.user;
         const { mes, tipo, valor } = req.body;
         if (!mes || !tipo) {
             return res.status(400).json({ success: false, error: 'mes y tipo son requeridos' });
         }
+
+        const isSuperAdmin = userTipo === 'superadmin';
+
+        if (!isSuperAdmin) {
+            if (tipo === 'programado') {
+                return res.status(403).json({ success: false, error: 'Solo el superadmin puede editar valores programados' });
+            }
+            const [existe] = await db.execute(
+                'SELECT 1 FROM seplade_indicador_usuarios WHERE indicador_id = ? AND usuario_id = ? AND usuario_tipo = ?',
+                [req.params.indicador_id, userId, userTipo]
+            );
+            if (existe.length === 0) {
+                return res.status(403).json({ success: false, error: 'No estás asignado a este indicador' });
+            }
+        }
+
         if (tipo === 'programado' || tipo === 'realizado') {
             if (valor !== '' && !/^\d+(\.\d+)?$/.test(valor)) {
                 return res.status(400).json({ success: false, error: 'El valor debe ser numérico' });
