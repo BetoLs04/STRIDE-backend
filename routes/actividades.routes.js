@@ -107,7 +107,7 @@ router.put('/actividades/:id', requireRole('superadmin', 'personal'), uploadActi
             'SELECT id FROM periodos_actividades WHERE activo = 1 ORDER BY anio DESC, FIELD(periodo, "enero-abril","mayo-agosto","septiembre-diciembre") DESC LIMIT 1'
         );
         const periodoActivoId = periodoActivo.length > 0 ? periodoActivo[0].id : null;
-        if (periodoActivoId && actividad.periodo_id !== periodoActivoId && !esSuperAdmin) {
+        if (!esSuperAdmin && periodoActivoId && actividad.periodo_id != null && Number(actividad.periodo_id) !== Number(periodoActivoId)) {
             if (req.files && req.files.length > 0) {
                 req.files.forEach(file => { try { fs.unlinkSync(file.path); } catch (err) {} });
             }
@@ -284,7 +284,7 @@ router.delete('/actividades/:id', requireRole('superadmin', 'personal'), async (
             'SELECT id FROM periodos_actividades WHERE activo = 1 ORDER BY anio DESC, FIELD(periodo, "enero-abril","mayo-agosto","septiembre-diciembre") DESC LIMIT 1'
         );
         const periodoActivoId = periodoActivo.length > 0 ? periodoActivo[0].id : null;
-        if (periodoActivoId && actividad.periodo_id !== periodoActivoId && !esSuperAdmin) {
+        if (!esSuperAdmin && periodoActivoId && actividad.periodo_id != null && Number(actividad.periodo_id) !== Number(periodoActivoId)) {
             return res.status(403).json({ success: false, error: 'No puedes eliminar actividades de periodos anteriores' });
         }
         const [imagenes] = await db.execute('SELECT * FROM actividad_imagenes WHERE actividad_id = ?', [id]);
