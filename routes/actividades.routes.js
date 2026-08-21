@@ -121,7 +121,7 @@ router.put('/actividades/:id', requireRole('superadmin', 'personal'), uploadActi
 
         console.log(`🔍 Validación periodo PUT - fecha: ${fechaStr}, mes: ${mesF}, dia: ${diaF}, periodo calculado: ${periodoActividad} ${anioActividad}, periodo activo: ${periodoActivoNombre} ${periodoActivoAnio}, mismo: ${esMismoPeriodo}`);
 
-        if (!esSuperAdmin && !esMismoPeriodo) {
+        if (!esSuperAdmin && periodoActivoNombre && !esMismoPeriodo) {
             if (req.files && req.files.length > 0) {
                 req.files.forEach(file => { try { fs.unlinkSync(file.path); } catch (err) {} });
             }
@@ -311,7 +311,7 @@ router.delete('/actividades/:id', requireRole('superadmin', 'personal'), async (
 
         const esMismoPeriodo = String(anioActividad) === String(periodoActivoAnio) && periodoActividad === periodoActivoNombre;
 
-        if (!esSuperAdmin && !esMismoPeriodo) {
+        if (!esSuperAdmin && periodoActivoNombre && !esMismoPeriodo) {
             return res.status(403).json({ success: false, error: 'No puedes eliminar actividades de periodos anteriores' });
         }
         const [imagenes] = await db.execute('SELECT * FROM actividad_imagenes WHERE actividad_id = ?', [id]);
