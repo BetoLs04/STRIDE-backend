@@ -103,6 +103,16 @@ router.put('/actividades/:id', requireRole('superadmin', 'personal'), uploadActi
             }
             return res.status(403).json({ success: false, error: 'No tienes permiso para editar esta actividad' });
         }
+        const [periodoActivo] = await db.execute(
+            'SELECT id FROM periodos_actividades WHERE activo = 1 ORDER BY anio DESC, FIELD(periodo, "enero-abril","mayo-agosto","septiembre-diciembre") DESC LIMIT 1'
+        );
+        const periodoActivoId = periodoActivo.length > 0 ? periodoActivo[0].id : null;
+        if (periodoActivoId && actividad.periodo_id !== periodoActivoId && !esSuperAdmin) {
+            if (req.files && req.files.length > 0) {
+                req.files.forEach(file => { try { fs.unlinkSync(file.path); } catch (err) {} });
+            }
+            return res.status(403).json({ success: false, error: 'No puedes editar actividades de periodos anteriores' });
+        }
         if (fecha_fin && new Date(fecha_fin) < new Date(fecha_inicio)) {
             if (req.files && req.files.length > 0) {
                 req.files.forEach(file => { try { fs.unlinkSync(file.path); } catch (err) {} });
@@ -258,12 +268,25 @@ router.get('/actividades/todas', async (req, res) => {
 router.delete('/actividades/:id', requireRole('superadmin', 'personal'), async (req, res) => {
     try {
         const { id } = req.params;
+        const currentUser = req.user;
         console.log(`🗑️ Solicitando eliminación de actividad ID: ${id}`);
         const [actividades] = await db.execute('SELECT * FROM actividades WHERE id = ?', [id]);
         if (actividades.length === 0) {
             return res.status(404).json({ success: false, error: 'Actividad no encontrada' });
         }
         const actividad = actividades[0];
+        const esOwner = String(actividad.creado_por_id) === String(currentUser.id) && actividad.creado_por_tipo === currentUser.tipo;
+        const esSuperAdmin = currentUser.tipo === 'superadmin';
+        if (!esOwner && !esSuperAdmin) {
+            return res.status(403).json({ success: false, error: 'No tienes permiso para eliminar esta actividad' });
+        }
+        const [periodoActivo] = await db.execute(
+            'SELECT id FROM periodos_actividades WHERE activo = 1 ORDER BY anio DESC, FIELD(periodo, "enero-abril","mayo-agosto","septiembre-diciembre") DESC LIMIT 1'
+        );
+        const periodoActivoId = periodoActivo.length > 0 ? periodoActivo[0].id : null;
+        if (periodoActivoId && actividad.periodo_id !== periodoActivoId && !esSuperAdmin) {
+            return res.status(403).json({ success: false, error: 'No puedes eliminar actividades de periodos anteriores' });
+        }
         const [imagenes] = await db.execute('SELECT * FROM actividad_imagenes WHERE actividad_id = ?', [id]);
         console.log(`📸 Imágenes a eliminar: ${imagenes.length}`);
         let imagenesEliminadas = 0;
