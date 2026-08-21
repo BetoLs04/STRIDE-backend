@@ -97,6 +97,7 @@ router.put('/actividades/:id', requireRole('superadmin', 'personal'), uploadActi
         const actividad = actividades[0];
         const esOwner = String(actividad.creado_por_id) === String(currentUser.id) && actividad.creado_por_tipo === currentUser.tipo;
         const esSuperAdmin = currentUser.tipo === 'superadmin';
+        console.log(`🔍 PUT actividad ${id} - creado_por_id: ${actividad.creado_por_id}, currentUser.id: ${currentUser.id}, creado_por_tipo: ${actividad.creado_por_tipo}, currentUser.tipo: ${currentUser.tipo}, esOwner: ${esOwner}, esSuperAdmin: ${esSuperAdmin}`);
         if (!esOwner && !esSuperAdmin) {
             if (req.files && req.files.length > 0) {
                 req.files.forEach(file => { try { fs.unlinkSync(file.path); } catch (err) {} });
