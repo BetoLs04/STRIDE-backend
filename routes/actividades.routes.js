@@ -106,17 +106,17 @@ router.put('/actividades/:id', requireRole('superadmin', 'personal'), uploadActi
         const [periodoActivo] = await db.execute(
             'SELECT id, anio, periodo FROM periodos_actividades WHERE activo = 1 ORDER BY anio DESC, FIELD(periodo, "enero-abril","mayo-agosto","septiembre-diciembre") DESC LIMIT 1'
         );
-        const periodoActivoId = periodoActivo.length > 0 ? periodoActivo[0].id : null;
         const periodoActivoAnio = periodoActivo.length > 0 ? periodoActivo[0].anio : null;
         const periodoActivoNombre = periodoActivo.length > 0 ? periodoActivo[0].periodo : null;
 
         const fechaInicioAct = new Date(actividad.fecha_inicio);
         const mesAct = fechaInicioAct.getMonth() + 1;
+        const diaAct = fechaInicioAct.getDate();
         let periodoActividad;
-        if (mesAct >= 2 && mesAct <= 5) periodoActividad = 'enero-abril';
-        else if (mesAct >= 6 && mesAct <= 9) periodoActividad = 'mayo-agosto';
+        if ((mesAct === 1 && diaAct >= 11) || (mesAct >= 2 && mesAct <= 4) || (mesAct === 5 && diaAct <= 10)) periodoActividad = 'enero-abril';
+        else if ((mesAct === 5 && diaAct >= 11) || (mesAct >= 6 && mesAct <= 8) || (mesAct === 9 && diaAct <= 10)) periodoActividad = 'mayo-agosto';
         else periodoActividad = 'septiembre-diciembre';
-        const anioActividad = fechaInicioAct.getFullYear();
+        const anioActividad = (mesAct === 1 && diaAct < 11) ? fechaInicioAct.getFullYear() - 1 : fechaInicioAct.getFullYear();
 
         const esMismoPeriodo = String(anioActividad) === String(periodoActivoAnio) && periodoActividad === periodoActivoNombre;
 
@@ -304,11 +304,12 @@ router.delete('/actividades/:id', requireRole('superadmin', 'personal'), async (
 
         const fechaInicioAct = new Date(actividad.fecha_inicio);
         const mesAct = fechaInicioAct.getMonth() + 1;
+        const diaAct = fechaInicioAct.getDate();
         let periodoActividad;
-        if (mesAct >= 2 && mesAct <= 5) periodoActividad = 'enero-abril';
-        else if (mesAct >= 6 && mesAct <= 9) periodoActividad = 'mayo-agosto';
+        if ((mesAct === 1 && diaAct >= 11) || (mesAct >= 2 && mesAct <= 4) || (mesAct === 5 && diaAct <= 10)) periodoActividad = 'enero-abril';
+        else if ((mesAct === 5 && diaAct >= 11) || (mesAct >= 6 && mesAct <= 8) || (mesAct === 9 && diaAct <= 10)) periodoActividad = 'mayo-agosto';
         else periodoActividad = 'septiembre-diciembre';
-        const anioActividad = fechaInicioAct.getFullYear();
+        const anioActividad = (mesAct === 1 && diaAct < 11) ? fechaInicioAct.getFullYear() - 1 : fechaInicioAct.getFullYear();
 
         const esMismoPeriodo = String(anioActividad) === String(periodoActivoAnio) && periodoActividad === periodoActivoNombre;
 
