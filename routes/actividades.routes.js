@@ -104,13 +104,29 @@ router.put('/actividades/:id', requireRole('superadmin', 'personal'), uploadActi
             return res.status(403).json({ success: false, error: 'No tienes permiso para editar esta actividad' });
         }
         const [periodoActivo] = await db.execute(
-            'SELECT id FROM periodos_actividades WHERE activo = 1 ORDER BY anio DESC, FIELD(periodo, "enero-abril","mayo-agosto","septiembre-diciembre") DESC LIMIT 1'
+            'SELECT id, anio, periodo FROM periodos_actividades WHERE activo = 1 ORDER BY anio DESC, FIELD(periodo, "enero-abril","mayo-agosto","septiembre-diciembre") DESC LIMIT 1'
         );
         const periodoActivoId = periodoActivo.length > 0 ? periodoActivo[0].id : null;
-        if (!esSuperAdmin && periodoActivoId && actividad.periodo_id != null && Number(actividad.periodo_id) !== Number(periodoActivoId)) {
+        const periodoActivoAnio = periodoActivo.length > 0 ? periodoActivo[0].anio : null;
+        const periodoActivoNombre = periodoActivo.length > 0 ? periodoActivo[0].periodo : null;
+
+        const fechaInicioAct = new Date(actividad.fecha_inicio);
+        const mesAct = fechaInicioAct.getMonth() + 1;
+        let periodoActividad;
+        if (mesAct >= 2 && mesAct <= 5) periodoActividad = 'enero-abril';
+        else if (mesAct >= 6 && mesAct <= 9) periodoActividad = 'mayo-agosto';
+        else periodoActividad = 'septiembre-diciembre';
+        const anioActividad = fechaInicioAct.getFullYear();
+
+        const esMismoPeriodo = String(anioActividad) === String(periodoActivoAnio) && periodoActividad === periodoActivoNombre;
+
+        console.log(`🔍 Validación periodo - actividad fecha: ${actividad.fecha_inicio}, periodo calculado: ${periodoActividad} ${anioActividad}, periodo activo: ${periodoActivoNombre} ${periodoActivoAnio}, mismo periodo: ${esMismoPeriodo}`);
+
+        if (!esSuperAdmin && !esMismoPeriodo) {
             if (req.files && req.files.length > 0) {
                 req.files.forEach(file => { try { fs.unlinkSync(file.path); } catch (err) {} });
             }
+            console.log(`❌ Bloqueado: actividad no es del periodo actual`);
             return res.status(403).json({ success: false, error: 'No puedes editar actividades de periodos anteriores' });
         }
         if (fecha_fin && new Date(fecha_fin) < new Date(fecha_inicio)) {
@@ -281,10 +297,22 @@ router.delete('/actividades/:id', requireRole('superadmin', 'personal'), async (
             return res.status(403).json({ success: false, error: 'No tienes permiso para eliminar esta actividad' });
         }
         const [periodoActivo] = await db.execute(
-            'SELECT id FROM periodos_actividades WHERE activo = 1 ORDER BY anio DESC, FIELD(periodo, "enero-abril","mayo-agosto","septiembre-diciembre") DESC LIMIT 1'
+            'SELECT id, anio, periodo FROM periodos_actividades WHERE activo = 1 ORDER BY anio DESC, FIELD(periodo, "enero-abril","mayo-agosto","septiembre-diciembre") DESC LIMIT 1'
         );
-        const periodoActivoId = periodoActivo.length > 0 ? periodoActivo[0].id : null;
-        if (!esSuperAdmin && periodoActivoId && actividad.periodo_id != null && Number(actividad.periodo_id) !== Number(periodoActivoId)) {
+        const periodoActivoAnio = periodoActivo.length > 0 ? periodoActivo[0].anio : null;
+        const periodoActivoNombre = periodoActivo.length > 0 ? periodoActivo[0].periodo : null;
+
+        const fechaInicioAct = new Date(actividad.fecha_inicio);
+        const mesAct = fechaInicioAct.getMonth() + 1;
+        let periodoActividad;
+        if (mesAct >= 2 && mesAct <= 5) periodoActividad = 'enero-abril';
+        else if (mesAct >= 6 && mesAct <= 9) periodoActividad = 'mayo-agosto';
+        else periodoActividad = 'septiembre-diciembre';
+        const anioActividad = fechaInicioAct.getFullYear();
+
+        const esMismoPeriodo = String(anioActividad) === String(periodoActivoAnio) && periodoActividad === periodoActivoNombre;
+
+        if (!esSuperAdmin && !esMismoPeriodo) {
             return res.status(403).json({ success: false, error: 'No puedes eliminar actividades de periodos anteriores' });
         }
         const [imagenes] = await db.execute('SELECT * FROM actividad_imagenes WHERE actividad_id = ?', [id]);
