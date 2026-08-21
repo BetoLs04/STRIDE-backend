@@ -127,7 +127,7 @@ router.put('/actividades/:id', requireRole('superadmin', 'personal'), uploadActi
                 req.files.forEach(file => { try { fs.unlinkSync(file.path); } catch (err) {} });
             }
             console.log(`❌ Bloqueado: actividad no es del periodo actual`);
-            return res.status(403).json({ success: false, error: 'No puedes editar actividades de periodos anteriores' });
+            return res.status(403).json({ success: false, error: `No puedes editar actividades de periodos anteriores`, debug: { fecha: fechaStr, periodoCalc: `${periodoActividad} ${anioActividad}`, periodoActivo: `${periodoActivoNombre} ${periodoActivoAnio}` } });
         }
         if (fecha_fin && new Date(fecha_fin) < new Date(fecha_inicio)) {
             if (req.files && req.files.length > 0) {
