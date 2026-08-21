@@ -104,11 +104,15 @@ router.put('/actividades/:id', requireRole('superadmin', 'personal'), uploadActi
             }
             return res.status(403).json({ success: false, error: 'No tienes permiso para editar esta actividad' });
         }
-        const [periodoActivo] = await db.execute(
-            'SELECT id, anio, periodo FROM periodos_actividades WHERE activo = 1 ORDER BY anio DESC, FIELD(periodo, "enero-abril","mayo-agosto","septiembre-diciembre") DESC LIMIT 1'
-        );
-        const periodoActivoAnio = periodoActivo.length > 0 ? periodoActivo[0].anio : null;
-        const periodoActivoNombre = periodoActivo.length > 0 ? periodoActivo[0].periodo : null;
+        const hoy = new Date();
+        const mesAhora = hoy.getMonth() + 1;
+        const diaAhora = hoy.getDate();
+        const anioAhora = hoy.getFullYear();
+        let periodoActualNombre;
+        if ((mesAhora === 1 && diaAhora >= 11) || (mesAhora >= 2 && mesAhora <= 4) || (mesAhora === 5 && diaAhora <= 10)) periodoActualNombre = 'enero-abril';
+        else if ((mesAhora === 5 && diaAhora >= 11) || (mesAhora >= 6 && mesAhora <= 8) || (mesAhora === 9 && diaAhora <= 10)) periodoActualNombre = 'mayo-agosto';
+        else periodoActualNombre = 'septiembre-diciembre';
+        const periodoActualAnio = (mesAhora === 1 && diaAhora < 11) ? anioAhora - 1 : anioAhora;
 
         const fechaStr = String(actividad.fecha_inicio).split(' ')[0].split('T')[0];
         const [añoF, mesF, diaF] = fechaStr.split('-').map(Number);
@@ -118,16 +122,16 @@ router.put('/actividades/:id', requireRole('superadmin', 'personal'), uploadActi
         else periodoActividad = 'septiembre-diciembre';
         const anioActividad = (mesF === 1 && diaF < 11) ? añoF - 1 : añoF;
 
-        const esMismoPeriodo = String(anioActividad) === String(periodoActivoAnio) && periodoActividad === periodoActivoNombre;
+        const esMismoPeriodo = String(anioActividad) === String(periodoActualAnio) && periodoActividad === periodoActualNombre;
 
-        console.log(`🔍 Validación periodo PUT - fecha: ${fechaStr}, mes: ${mesF}, dia: ${diaF}, periodo calculado: ${periodoActividad} ${anioActividad}, periodo activo: ${periodoActivoNombre} ${periodoActivoAnio}, mismo: ${esMismoPeriodo}`);
+        console.log(`🔍 Validacion periodo PUT - fecha: ${fechaStr}, periodo calc: ${periodoActividad} ${anioActividad}, periodo actual: ${periodoActualNombre} ${periodoActualAnio}, mismo: ${esMismoPeriodo}`);
 
-        if (!esSuperAdmin && periodoActivoNombre && !esMismoPeriodo) {
+        if (!esSuperAdmin && fechaStr && !esMismoPeriodo) {
             if (req.files && req.files.length > 0) {
                 req.files.forEach(file => { try { fs.unlinkSync(file.path); } catch (err) {} });
             }
             console.log(`❌ Bloqueado: actividad no es del periodo actual`);
-            return res.status(403).json({ success: false, error: `No puedes editar actividades de periodos anteriores`, debug: { fecha: fechaStr, periodoCalc: `${periodoActividad} ${anioActividad}`, periodoActivo: `${periodoActivoNombre} ${periodoActivoAnio}` } });
+            return res.status(403).json({ success: false, error: 'No puedes editar actividades de periodos anteriores' });
         }
         if (fecha_fin && new Date(fecha_fin) < new Date(fecha_inicio)) {
             if (req.files && req.files.length > 0) {
@@ -296,11 +300,15 @@ router.delete('/actividades/:id', requireRole('superadmin', 'personal'), async (
         if (!esOwner && !esSuperAdmin) {
             return res.status(403).json({ success: false, error: 'No tienes permiso para eliminar esta actividad' });
         }
-        const [periodoActivo] = await db.execute(
-            'SELECT id, anio, periodo FROM periodos_actividades WHERE activo = 1 ORDER BY anio DESC, FIELD(periodo, "enero-abril","mayo-agosto","septiembre-diciembre") DESC LIMIT 1'
-        );
-        const periodoActivoAnio = periodoActivo.length > 0 ? periodoActivo[0].anio : null;
-        const periodoActivoNombre = periodoActivo.length > 0 ? periodoActivo[0].periodo : null;
+        const hoy = new Date();
+        const mesAhora = hoy.getMonth() + 1;
+        const diaAhora = hoy.getDate();
+        const anioAhora = hoy.getFullYear();
+        let periodoActualNombre;
+        if ((mesAhora === 1 && diaAhora >= 11) || (mesAhora >= 2 && mesAhora <= 4) || (mesAhora === 5 && diaAhora <= 10)) periodoActualNombre = 'enero-abril';
+        else if ((mesAhora === 5 && diaAhora >= 11) || (mesAhora >= 6 && mesAhora <= 8) || (mesAhora === 9 && diaAhora <= 10)) periodoActualNombre = 'mayo-agosto';
+        else periodoActualNombre = 'septiembre-diciembre';
+        const periodoActualAnio = (mesAhora === 1 && diaAhora < 11) ? anioAhora - 1 : anioAhora;
 
         const fechaStr = String(actividad.fecha_inicio).split(' ')[0].split('T')[0];
         const [añoF, mesF, diaF] = fechaStr.split('-').map(Number);
@@ -310,9 +318,9 @@ router.delete('/actividades/:id', requireRole('superadmin', 'personal'), async (
         else periodoActividad = 'septiembre-diciembre';
         const anioActividad = (mesF === 1 && diaF < 11) ? añoF - 1 : añoF;
 
-        const esMismoPeriodo = String(anioActividad) === String(periodoActivoAnio) && periodoActividad === periodoActivoNombre;
+        const esMismoPeriodo = String(anioActividad) === String(periodoActualAnio) && periodoActividad === periodoActualNombre;
 
-        if (!esSuperAdmin && periodoActivoNombre && !esMismoPeriodo) {
+        if (!esSuperAdmin && fechaStr && !esMismoPeriodo) {
             return res.status(403).json({ success: false, error: 'No puedes eliminar actividades de periodos anteriores' });
         }
         const [imagenes] = await db.execute('SELECT * FROM actividad_imagenes WHERE actividad_id = ?', [id]);
