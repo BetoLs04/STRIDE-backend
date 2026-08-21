@@ -5,12 +5,12 @@ const fs = require('fs');
 const db = require('../config/database');
 const { uploadActividades, uploadDir } = require('../middleware/upload');
 const { requireRole } = require('../middleware/roles');
-const { sanitize, sanitizeStr } = require('../utils/sanitize');
+const { sanitize, sanitizeStr, sanitizeLongStr } = require('../utils/sanitize');
 const { emit } = require('../services/socketEmitter');
 
 router.post('/actividades', requireRole('superadmin', 'personal'), uploadActividades.array('imagenes', 5), async (req, res) => {
     try {
-        sanitize(req.body, { titulo: sanitizeStr, descripcion: sanitizeStr, tipo_actividad: sanitizeStr });
+        sanitize(req.body, { titulo: sanitizeStr, descripcion: sanitizeLongStr, tipo_actividad: sanitizeStr });
         const { titulo, descripcion, tipo_actividad, fecha_inicio, fecha_fin, direccion_id, creado_por_id, creado_por_tipo } = req.body;
         console.log('📝 Datos recibidos:', { titulo, descripcion, tipo_actividad, fecha_inicio, fecha_fin, direccion_id, creado_por_id, creado_por_tipo });
         console.log('📸 Archivos recibidos:', req.files ? req.files.length : 0);
@@ -78,7 +78,7 @@ router.put('/actividades/:id', requireRole('superadmin', 'personal'), uploadActi
     try {
         const { id } = req.params;
         const currentUser = req.user;
-        sanitize(req.body, { titulo: sanitizeStr, descripcion: sanitizeStr, tipo_actividad: sanitizeStr });
+        sanitize(req.body, { titulo: sanitizeStr, descripcion: sanitizeLongStr, tipo_actividad: sanitizeStr });
         const { titulo, descripcion, tipo_actividad, fecha_inicio, fecha_fin } = req.body;
         console.log('✏️ Editando actividad ID:', id);
         if (!titulo || !tipo_actividad || !fecha_inicio) {
