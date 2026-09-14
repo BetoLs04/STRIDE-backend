@@ -6,7 +6,7 @@ const db = require('../config/database');
 const { uploadTareas } = require('../middleware/upload');
 const { requireRole, requireSuperAdmin } = require('../middleware/roles');
 const { verifyToken } = require('../middleware/auth');
-const { sanitize, sanitizeStr } = require('../utils/sanitize');
+const { sanitize, sanitizeStr, sanitizeText } = require('../utils/sanitize');
 const { emit } = require('../services/socketEmitter');
 
 router.get('/tareas/usuarios-disponibles', async (req, res) => {
@@ -28,7 +28,7 @@ router.post('/tareas', requireSuperAdmin, uploadTareas.array('archivos', 5), asy
     const connection = await db.getConnection();
     try {
         await connection.beginTransaction();
-        sanitize(req.body, { titulo: sanitizeStr, descripcion: sanitizeStr });
+        sanitize(req.body, { titulo: sanitizeStr, descripcion: sanitizeText });
         const { titulo, descripcion, fecha_entrega, asignaciones } = req.body;
         const creado_por_id = req.body.creado_por_id;
         const creado_por_tipo = req.body.creado_por_tipo || 'superadmin';
@@ -182,7 +182,7 @@ router.post('/tareas/completar/:asignacionId', verifyToken, requireRole('persona
   try {
     await connection.beginTransaction();
     const { asignacionId } = req.params;
-    sanitize(req.body, { comentarios: sanitizeStr });
+    sanitize(req.body, { comentarios: sanitizeText });
     const { comentarios } = req.body;
     if (!comentarios?.trim() && (!req.files || req.files.length === 0)) {
       await connection.rollback(); connection.release();
@@ -339,7 +339,7 @@ router.put('/tareas/:id', requireSuperAdmin, uploadTareas.array('archivos', 5), 
   try {
     await connection.beginTransaction();
     const { id } = req.params;
-    sanitize(req.body, { titulo: sanitizeStr, descripcion: sanitizeStr });
+    sanitize(req.body, { titulo: sanitizeStr, descripcion: sanitizeText });
     const { titulo, descripcion, fecha_entrega, asignaciones } = req.body;
     await connection.execute(
       `UPDATE tareas SET titulo = ?, descripcion = ?, fecha_entrega = ? WHERE id = ?`,
