@@ -1,3 +1,4 @@
+// Sanitización de entradas - sanitizeText mantiene textos largos y saltos de línea para campos de tipo TEXT
 const sanitizeStr = (val) => typeof val === 'string' ? val.trim().replace(/[\0\x08\x09\x1a\n\r"'\\%_]/g, '').substring(0, 255) : '';
 const sanitizeLongStr = (val) => typeof val === 'string' ? val.trim().replace(/[\0\x08\x09\x1a\n\r"'\\%_]/g, '').substring(0, 2000) : '';
 const sanitizeText = (val) => typeof val === 'string' ? val.trim().replace(/\0/g, '') : '';

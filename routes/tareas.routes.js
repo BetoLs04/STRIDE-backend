@@ -6,6 +6,7 @@ const db = require('../config/database');
 const { uploadTareas } = require('../middleware/upload');
 const { requireRole, requireSuperAdmin } = require('../middleware/roles');
 const { verifyToken } = require('../middleware/auth');
+// Rutas para la gestión de tareas y respuestas de asignaciones (soporte para texto extendido)
 const { sanitize, sanitizeStr, sanitizeText } = require('../utils/sanitize');
 const { emit } = require('../services/socketEmitter');
 
