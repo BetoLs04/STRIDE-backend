@@ -134,6 +134,18 @@ async function runMigrations() {
         await db.execute('ALTER TABLE actividades ADD FOREIGN KEY (periodo_id) REFERENCES periodos_actividades(id) ON DELETE SET NULL');
         console.log('✅ FK periodo_id agregada a actividades');
     } catch (_) {}
+    try {
+        await db.execute(`CREATE TABLE IF NOT EXISTS estadisticos_genero_fila_usuarios (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            fila_id INT NOT NULL,
+            usuario_id INT NOT NULL,
+            usuario_tipo ENUM('directivo', 'personal') NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uk_fila_usuario (fila_id, usuario_id, usuario_tipo),
+            FOREIGN KEY (fila_id) REFERENCES estadisticos_genero_filas(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
+        console.log('✅ Tabla estadisticos_genero_fila_usuarios creada/verificada');
+    } catch (_) {}
 }
 
 const app = express();

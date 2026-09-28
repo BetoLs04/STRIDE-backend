@@ -93,8 +93,23 @@ router.get('/estadisticos-docentes-carreras', async (req, res) => {
         const p = [];
         if (hoja_id) { q += ' WHERE hoja_id = ?'; p.push(hoja_id); }
         q += ' ORDER BY orden ASC, id ASC';
-        const [r] = await db.execute(q, p);
-        res.json({ success: true, data: r });
+        const [carreras] = await db.execute(q, p);
+
+        for (let c of carreras) {
+            const [usuarios] = await db.execute(`
+                SELECT edu.id as asignacion_id, edu.usuario_id, edu.usuario_tipo,
+                       CASE WHEN edu.usuario_tipo = 'directivo' THEN d.nombre_completo
+                            WHEN edu.usuario_tipo = 'personal' THEN p.nombre_completo
+                       END as nombre
+                FROM estadisticos_docentes_usuarios edu
+                LEFT JOIN directivos d ON edu.usuario_id = d.id AND edu.usuario_tipo = 'directivo'
+                LEFT JOIN personal p ON edu.usuario_id = p.id AND edu.usuario_tipo = 'personal'
+                WHERE edu.carrera_id = ?
+                ORDER BY nombre`, [c.id]);
+            c.usuarios = usuarios;
+        }
+
+        res.json({ success: true, data: carreras });
     } catch (e) { console.error(e); res.status(500).json({ success: false, error: 'Error al obtener carreras' }); }
 });
 
@@ -145,11 +160,21 @@ router.delete('/estadisticos-docentes-carreras/:id', requireSuperAdmin, async (r
 router.get('/estadisticos-docentes-secciones', async (req, res) => {
     try {
         const { carrera_id } = req.query;
-        let q = 'SELECT * FROM estadisticos_docentes_secciones';
-        const p = [];
-        if (carrera_id) { q += ' WHERE carrera_id = ?'; p.push(carrera_id); }
-        q += ' ORDER BY orden ASC, id ASC';
-        const [r] = await db.execute(q, p);
+        if (!carrera_id) return res.status(400).json({ success: false, error: 'carrera_id requerido' });
+
+        const esSuperAdmin = req.user?.tipo === 'superadmin';
+        if (!esSuperAdmin) {
+            const [asignado] = await db.execute(
+                'SELECT 1 FROM estadisticos_docentes_usuarios WHERE carrera_id = ? AND usuario_id = ? AND usuario_tipo = ? LIMIT 1',
+                [carrera_id, req.user?.id, req.user?.tipo]
+            );
+            if (asignado.length === 0) {
+                return res.status(403).json({ success: false, error: 'No tienes acceso a esta carrera' });
+            }
+        }
+
+        let q = 'SELECT * FROM estadisticos_docentes_secciones WHERE carrera_id = ? ORDER BY orden ASC, id ASC';
+        const [r] = await db.execute(q, [carrera_id]);
         res.json({ success: true, data: r });
     } catch (e) { console.error(e); res.status(500).json({ success: false, error: 'Error al obtener secciones' }); }
 });
@@ -159,11 +184,23 @@ router.get('/estadisticos-docentes-secciones', async (req, res) => {
 router.get('/estadisticos-docentes-filas', async (req, res) => {
     try {
         const { seccion_id } = req.query;
-        let q = 'SELECT * FROM estadisticos_docentes_filas';
-        const p = [];
-        if (seccion_id) { q += ' WHERE seccion_id = ?'; p.push(seccion_id); }
-        q += ' ORDER BY orden ASC, id ASC';
-        const [r] = await db.execute(q, p);
+        if (!seccion_id) return res.status(400).json({ success: false, error: 'seccion_id requerido' });
+
+        const esSuperAdmin = req.user?.tipo === 'superadmin';
+        if (!esSuperAdmin) {
+            const [s] = await db.execute('SELECT carrera_id FROM estadisticos_docentes_secciones WHERE id = ?', [seccion_id]);
+            if (s.length === 0) return res.status(404).json({ success: false, error: 'Sección no encontrada' });
+            const [asignado] = await db.execute(
+                'SELECT 1 FROM estadisticos_docentes_usuarios WHERE carrera_id = ? AND usuario_id = ? AND usuario_tipo = ? LIMIT 1',
+                [s[0].carrera_id, req.user?.id, req.user?.tipo]
+            );
+            if (asignado.length === 0) {
+                return res.status(403).json({ success: false, error: 'No tienes acceso a esta sección' });
+            }
+        }
+
+        let q = 'SELECT * FROM estadisticos_docentes_filas WHERE seccion_id = ? ORDER BY orden ASC, id ASC';
+        const [r] = await db.execute(q, [seccion_id]);
         res.json({ success: true, data: r });
     } catch (e) { console.error(e); res.status(500).json({ success: false, error: 'Error al obtener filas' }); }
 });
@@ -241,6 +278,12 @@ router.get('/estadisticos-docentes-mis-hojas', async (req, res) => {
     try {
         const { usuario_id, usuario_tipo } = req.query;
         if (!usuario_id || !usuario_tipo) return res.status(400).json({ success: false, error: 'Faltan parámetros' });
+        
+        if (usuario_tipo === 'superadmin') {
+            const [r] = await db.execute('SELECT * FROM estadisticos_docentes_hojas ORDER BY anio DESC, id DESC');
+            return res.json({ success: true, data: r });
+        }
+
         const [r] = await db.execute(`
             SELECT DISTINCT eh.* FROM estadisticos_docentes_hojas eh
             INNER JOIN estadisticos_docentes_carreras ec ON ec.hoja_id = eh.id
