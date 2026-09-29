@@ -170,9 +170,33 @@ try {
     console.error('❌ Error al crear symlink de uploads:', err.message);
 }
 
+// Orígenes permitidos (CORS)
+const ALLOWED_ORIGINS = [
+    'https://strideutmat.com',
+    'https://www.strideutmat.com',
+    'http://localhost:3000',
+    'http://localhost:5000'
+];
+
+// Orígenes extra opcionales vía variable de entorno (separados por coma)
+if (process.env.ALLOWED_ORIGINS) {
+    process.env.ALLOWED_ORIGINS.split(',').forEach((o) => {
+        const origin = o.trim();
+        if (origin && !ALLOWED_ORIGINS.includes(origin)) {
+            ALLOWED_ORIGINS.push(origin);
+        }
+    });
+}
+
+const isAllowedOrigin = (origin) => !origin || ALLOWED_ORIGINS.includes(origin);
+
 // Middleware para manejar preflight OPTIONS
 app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', 'https://strideutmat.com');
+    const origin = req.headers.origin;
+    if (isAllowedOrigin(origin)) {
+        res.header('Access-Control-Allow-Origin', origin || ALLOWED_ORIGINS[0]);
+        res.header('Vary', 'Origin');
+    }
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, Origin, X-Requested-With');
     res.header('Access-Control-Allow-Credentials', 'true');
@@ -183,7 +207,7 @@ app.use((req, res, next) => {
 });
 
 app.use(cors({
-    origin: 'https://strideutmat.com',
+    origin: (origin, callback) => callback(null, isAllowedOrigin(origin)),
     credentials: true
 }));
 
@@ -204,7 +228,6 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
     maxAge: '30d',
     etag: true,
     setHeaders: (res, filePath) => {
-        res.set('Access-Control-Allow-Origin', 'https://strideutmat.com');
         res.set('Cross-Origin-Resource-Policy', 'cross-origin');
     }
 }));
@@ -234,7 +257,7 @@ app.use('/api/university', estadisticosDocentesRoutes);
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
-        origin: 'https://strideutmat.com',
+        origin: ALLOWED_ORIGINS,
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
         credentials: true
     }
