@@ -150,6 +150,7 @@ async function runMigrations() {
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+app.set('trust proxy', 1);
 
 // ✅ Recrear symlink de uploads automáticamente después de cada deploy
 const uploadsDir = path.join(__dirname, 'uploads');
