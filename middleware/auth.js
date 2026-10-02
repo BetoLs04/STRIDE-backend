@@ -18,7 +18,14 @@ function generateToken(user) {
 function verifyToken(req, res, next) {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return res.status(401).json({ success: false, error: 'Token de autenticación requerido' });
+        return res.status(401)
+            .set('WWW-Authenticate', 'Bearer realm="stride-api"')
+            .json({
+                success: false,
+                code: 'AUTH_TOKEN_MISSING',
+                error: 'Token de autenticación requerido',
+                info: 'Respuesta ESPERADA cuando una ruta protegida se prueba sin iniciar sesión; no indica fallo del servidor. Para comprobar disponibilidad use GET /api/university/health (responde 200 sin token).'
+            });
     }
 
     const token = authHeader.split(' ')[1];
@@ -27,7 +34,14 @@ function verifyToken(req, res, next) {
         req.user = decoded;
         next();
     } catch (error) {
-        return res.status(401).json({ success: false, error: 'Token inválido o expirado' });
+        return res.status(401)
+            .set('WWW-Authenticate', 'Bearer error="invalid_token"')
+            .json({
+                success: false,
+                code: 'AUTH_TOKEN_INVALID',
+                error: 'Token inválido o expirado',
+                info: 'El token vence a las 24 h; vuelva a iniciar sesión para obtener uno nuevo. No indica fallo del servidor.'
+            });
     }
 }
 

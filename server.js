@@ -234,6 +234,16 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
 }));
 
 // ========== MOUNT ROUTES ==========
+// Health público: diagnóstico sin token (soporte/monitoreo)
+app.get('/api/university/health', (req, res) => {
+    res.json({
+        success: true,
+        status: 'ok',
+        service: 'stride-api',
+        time: new Date().toISOString(),
+        uptime_seconds: Math.round(process.uptime())
+    });
+});
 
 // Public routes (no auth needed) + mixed (uploads has internal verifyToken)
 app.use('/api/university', authRoutes);
