@@ -208,7 +208,15 @@ router.patch('/estadisticos-genero-filas/:id/celda', async (req, res) => {
 
         await db.execute('UPDATE estadisticos_genero_filas SET valores = ? WHERE id = ?', [JSON.stringify(valores), id]);
         res.json({ success: true, message: 'Celda actualizada' });
-        emit('estadisticos-genero:updated', { type: 'fila:celda-updated', id: parseInt(req.params.id) });
+        emit('estadisticos-genero:updated', {
+            type: 'fila:celda-updated',
+            id: parseInt(id),
+            fila: {
+                id: parseInt(filas[0].id),
+                valores
+            },
+            origin_user_id: req.user?.id ?? null
+        });
     } catch (error) {
         console.error('Error al actualizar celda:', error);
         res.status(500).json({ success: false, error: 'Error al actualizar celda' });
