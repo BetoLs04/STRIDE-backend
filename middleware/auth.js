@@ -15,7 +15,23 @@ function generateToken(user) {
     );
 }
 
+// Endpoints públicos de solo lectura: la página de inicio y el portal de
+// comunicados los consumen sin sesión (coincide con PUBLIC_API_PREFIXES del
+// frontend). Todo lo demás bajo /api/university exige token.
+const PUBLIC_GET_PATTERNS = [
+    /^\/comunicados$/,                 // listado público
+    /^\/comunicados\/\d+$/,            // detalle público
+    /^\/comunicados-recientes$/,       // carrusel del Home (?limit=10)
+    /^\/comunicados-recientes\/\d+$/,  // portal público (/10)
+    /^\/comunicados-recientes-alt$/,   // variante de respaldo
+    /^\/check-logo$/,                  // logo institucional sin sesión
+];
+
 function verifyToken(req, res, next) {
+    if (req.method === 'GET' && PUBLIC_GET_PATTERNS.some((re) => re.test(req.path))) {
+        return next();
+    }
+
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return res.status(401)
