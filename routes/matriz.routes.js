@@ -371,7 +371,7 @@ router.post('/matriz-filas', async (req, res) => {
                 return res.status(403).json({ success: false, error: 'No estás asignado a esta sección' });
             }
 
-            let [encabezado] = await db.execute('SELECT bloqueo_filas FROM matriz_encabezado LIMIT 1');
+            let [encabezado] = await db.execute('SELECT * FROM matriz_encabezado LIMIT 1');
             if (encabezado.length > 0 && encabezado[0].bloqueo_filas) {
                 return res.status(403).json({ success: false, error: 'La creación de filas está bloqueada' });
             }
@@ -411,13 +411,22 @@ router.put('/matriz-filas/:id', async (req, res) => {
                 return res.status(403).json({ success: false, error: 'No estás asignado a esta sección' });
             }
 
-            const [columnas] = await db.execute('SELECT id, bloqueada FROM matriz_columnas');
-            let [encabezado] = await db.execute('SELECT bloqueo_1er_cuatrimestre, bloqueo_2do_cuatrimestre, bloqueo_3er_cuatrimestre FROM matriz_encabezado LIMIT 1');
+            const [columnas] = await db.execute('SELECT * FROM matriz_columnas');
+            let [encabezado] = await db.execute('SELECT * FROM matriz_encabezado LIMIT 1');
             const enc = encabezado.length > 0 ? encabezado[0] : {};
             const bloqueosCuatri = [enc.bloqueo_1er_cuatrimestre, enc.bloqueo_2do_cuatrimestre, enc.bloqueo_3er_cuatrimestre];
 
             const [filaActual] = await db.execute('SELECT valores FROM matriz_filas WHERE id = ?', [id]);
-            const valoresActuales = JSON.parse(filaActual[0].valores || '{}');
+            if (filaActual.length === 0) {
+                return res.status(404).json({ success: false, error: 'Fila no encontrada' });
+            }
+            const rawValores = filaActual[0].valores;
+            let valoresActuales = {};
+            try {
+                valoresActuales = typeof rawValores === 'string' ? JSON.parse(rawValores || '{}') : (rawValores || {});
+            } catch (_) {
+                valoresActuales = {};
+            }
             const valoresFiltrados = { ...valoresActuales };
 
             for (const key of Object.keys(valores || {})) {
@@ -429,21 +438,19 @@ router.put('/matriz-filas/:id', async (req, res) => {
                     }
                 } else if (key.startsWith('f_')) {
                     const idx = parseInt(key.replace('f_', ''));
-                    if (idx >= 0 && idx <= 2) {
-                        if (!bloqueosCuatri[idx]) {
+                    if (idx >= 0 && idx <= 3) {
+                        const bloqueo = idx === 3 ? enc.bloqueo_anual : bloqueosCuatri[idx];
+                        if (!bloqueo) {
                             valoresFiltrados[key] = valores[key];
                         }
                     }
                 }
             }
 
-            const [result] = await db.execute(
+            await db.execute(
                 'UPDATE matriz_filas SET valores = ? WHERE id = ?',
                 [JSON.stringify(valoresFiltrados), id]
             );
-            if (result.affectedRows === 0) {
-                return res.status(404).json({ success: false, error: 'Fila no encontrada' });
-            }
             const [updated] = await db.execute('SELECT * FROM matriz_filas WHERE id = ?', [id]);
             res.json({ success: true, data: updated[0], message: 'Fila actualizada' });
             emit('matriz:updated', { type: 'fila:updated', id: parseInt(req.params.id) });
@@ -455,7 +462,10 @@ router.put('/matriz-filas/:id', async (req, res) => {
             [JSON.stringify(valores || {}), id]
         );
         if (result.affectedRows === 0) {
-            return res.status(404).json({ success: false, error: 'Fila no encontrada' });
+            const [existeFila] = await db.execute('SELECT id FROM matriz_filas WHERE id = ?', [id]);
+            if (existeFila.length === 0) {
+                return res.status(404).json({ success: false, error: 'Fila no encontrada' });
+            }
         }
         const [updated] = await db.execute('SELECT * FROM matriz_filas WHERE id = ?', [id]);
         res.json({ success: true, data: updated[0], message: 'Fila actualizada' });
@@ -486,7 +496,7 @@ router.delete('/matriz-filas/:id', async (req, res) => {
                 return res.status(403).json({ success: false, error: 'No estás asignado a esta sección' });
             }
 
-            let [encabezado] = await db.execute('SELECT bloqueo_filas FROM matriz_encabezado LIMIT 1');
+            let [encabezado] = await db.execute('SELECT * FROM matriz_encabezado LIMIT 1');
             if (encabezado.length > 0 && encabezado[0].bloqueo_filas) {
                 return res.status(403).json({ success: false, error: 'La eliminación de filas está bloqueada' });
             }

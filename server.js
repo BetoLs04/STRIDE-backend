@@ -61,47 +61,53 @@ uploadDirs.forEach(dir => {
 });
 
 // ========== MIGRATIONS ==========
+function warnMigration(err) {
+    const ignorables = ['ER_DUP_FIELDNAME', 'ER_DUP_KEYNAME', 'ER_TABLE_EXISTS_ERROR'];
+    if (err && ignorables.includes(err.code)) return;
+    console.warn('⚠️ Migración no aplicada:', err && err.message ? err.message : err);
+}
+
 async function runMigrations() {
     try {
         await db.execute('ALTER TABLE matriz_columnas ADD COLUMN bloqueada TINYINT(1) DEFAULT 0 AFTER activa');
         console.log('✅ Columna bloqueada agregada a matriz_columnas');
-    } catch (_) {}
+    } catch (e) { warnMigration(e); }
     try {
         await db.execute('ALTER TABLE matriz_encabezado ADD COLUMN bloqueo_1er_cuatrimestre TINYINT(1) DEFAULT 0');
         console.log('✅ Columna bloqueo_1er_cuatrimestre agregada a matriz_encabezado');
-    } catch (_) {}
+    } catch (e) { warnMigration(e); }
     try {
         await db.execute('ALTER TABLE matriz_encabezado ADD COLUMN bloqueo_2do_cuatrimestre TINYINT(1) DEFAULT 0');
         console.log('✅ Columna bloqueo_2do_cuatrimestre agregada a matriz_encabezado');
-    } catch (_) {}
+    } catch (e) { warnMigration(e); }
     try {
         await db.execute('ALTER TABLE matriz_encabezado ADD COLUMN bloqueo_3er_cuatrimestre TINYINT(1) DEFAULT 0');
         console.log('✅ Columna bloqueo_3er_cuatrimestre agregada a matriz_encabezado');
-    } catch (_) {}
+    } catch (e) { warnMigration(e); }
     try {
         await db.execute('ALTER TABLE matriz_encabezado ADD COLUMN bloqueo_anual TINYINT(1) DEFAULT 0');
         console.log('✅ Columna bloqueo_anual agregada a matriz_encabezado');
-    } catch (_) {}
+    } catch (e) { warnMigration(e); }
     try {
         await db.execute('ALTER TABLE matriz_encabezado ADD COLUMN bloqueo_filas TINYINT(1) DEFAULT 0');
         console.log('✅ Columna bloqueo_filas agregada a matriz_encabezado');
-    } catch (_) {}
+    } catch (e) { warnMigration(e); }
     try {
         await db.execute("ALTER TABLE smoa_columnas ADD COLUMN tipo_dato VARCHAR(20) DEFAULT 'texto' AFTER activa");
         console.log('✅ Columna tipo_dato agregada a smoa_columnas');
-    } catch (_) {}
+    } catch (e) { warnMigration(e); }
     try {
         await db.execute("ALTER TABLE smoa_columnas ADD COLUMN permiso_subida VARCHAR(20) DEFAULT 'todos' AFTER tipo_dato");
         console.log('✅ Columna permiso_subida agregada a smoa_columnas');
-    } catch (_) {}
+    } catch (e) { warnMigration(e); }
     try {
         await db.execute("ALTER TABLE smoa_encabezado ADD COLUMN imagen_ancho INT DEFAULT NULL");
         console.log('✅ Columna imagen_ancho agregada a smoa_encabezado');
-    } catch (_) {}
+    } catch (e) { warnMigration(e); }
     try {
         await db.execute("ALTER TABLE smoa_encabezado ADD COLUMN imagen_alineacion VARCHAR(20) DEFAULT 'center'");
         console.log('✅ Columna imagen_alineacion agregada a smoa_encabezado');
-    } catch (_) {}
+    } catch (e) { warnMigration(e); }
     try {
         await db.execute(`CREATE TABLE IF NOT EXISTS actividad_lectura (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -114,7 +120,7 @@ async function runMigrations() {
             FOREIGN KEY (super_user_id) REFERENCES super_users(id) ON DELETE CASCADE
         )`);
         console.log('✅ Tabla actividad_lectura creada/verificada');
-    } catch (_) {}
+    } catch (e) { warnMigration(e); }
     try {
         await db.execute(`CREATE TABLE IF NOT EXISTS periodos_actividades (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -125,15 +131,15 @@ async function runMigrations() {
             UNIQUE KEY unique_periodo (anio, periodo)
         )`);
         console.log('✅ Tabla periodos_actividades creada/verificada');
-    } catch (_) {}
+    } catch (e) { warnMigration(e); }
     try {
         await db.execute('ALTER TABLE actividades ADD COLUMN periodo_id INT DEFAULT NULL AFTER estado');
         console.log('✅ Columna periodo_id agregada a actividades');
-    } catch (_) {}
+    } catch (e) { warnMigration(e); }
     try {
         await db.execute('ALTER TABLE actividades ADD FOREIGN KEY (periodo_id) REFERENCES periodos_actividades(id) ON DELETE SET NULL');
         console.log('✅ FK periodo_id agregada a actividades');
-    } catch (_) {}
+    } catch (e) { warnMigration(e); }
     try {
         await db.execute(`CREATE TABLE IF NOT EXISTS estadisticos_genero_fila_usuarios (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -145,7 +151,7 @@ async function runMigrations() {
             FOREIGN KEY (fila_id) REFERENCES estadisticos_genero_filas(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
         console.log('✅ Tabla estadisticos_genero_fila_usuarios creada/verificada');
-    } catch (_) {}
+    } catch (e) { warnMigration(e); }
 }
 
 const app = express();
